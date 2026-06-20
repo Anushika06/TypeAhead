@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: typeahead
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/typeahead
+    username: postgres
+    password: mn@h_2006
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate        
+    open-in-view: false
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
