@@ -88,4 +88,21 @@ public interface SearchQueryRepository extends JpaRepository<SearchQuery, String
             WHERE last_decay_at < NOW() - INTERVAL '20 hours'
             """, nativeQuery = true)
     int decayTrendScores();
+
+    /**
+     * Returns the top 5 queries ranked by the logarithmic scoring formula:
+     * {@code score = LN(total_count + 1) + LN(trend_score + 1)}
+     *
+     * <p>The same formula is used by {@code SuggestionService} so trending
+     * rankings are consistent with autocomplete rankings.
+     *
+     * @return up to 5 rows ordered highest-score-first
+     */
+    @Query(value = """
+            SELECT *
+            FROM search_queries
+            ORDER BY (LN(total_count + 1) + LN(trend_score + 1)) DESC
+            LIMIT 5
+            """, nativeQuery = true)
+    List<SearchQuery> findTopTrending();
 }
