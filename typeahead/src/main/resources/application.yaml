@@ -16,3 +16,18 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      connect-timeout: 2000ms
+
+# ── Application-level cache settings ──────────────────────────────────────────
+cache:
+  redis:
+    # How long a prefix ZSET lives in Redis before expiring.
+    # On expiry the next /suggest call will be a cache miss → PostgreSQL fallback.
+    ttl-minutes: 60
+
