@@ -2,6 +2,7 @@ package com.anushika.typeahead.stream;
 
 import com.anushika.typeahead.cache.CacheRefreshService;
 import com.anushika.typeahead.service.BatchPersistenceService;
+import com.anushika.typeahead.service.MetricsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.connection.stream.MapRecord;
@@ -79,6 +80,7 @@ public class SearchEventConsumer {
     private final StringRedisTemplate redisTemplate;
     private final BatchPersistenceService batchPersistenceService;
     private final CacheRefreshService cacheRefreshService;
+    private final MetricsService metricsService;
 
     /**
      * In-memory aggregation map: query → total count increment since last flush.
@@ -106,10 +108,12 @@ public class SearchEventConsumer {
 
     public SearchEventConsumer(StringRedisTemplate redisTemplate,
                                BatchPersistenceService batchPersistenceService,
-                               CacheRefreshService cacheRefreshService) {
+                               CacheRefreshService cacheRefreshService,
+                               MetricsService metricsService) {
         this.redisTemplate = redisTemplate;
         this.batchPersistenceService = batchPersistenceService;
         this.cacheRefreshService = cacheRefreshService;
+        this.metricsService = metricsService;
     }
 
     // ── Poll loop ─────────────────────────────────────────────────────────────
@@ -173,6 +177,7 @@ public class SearchEventConsumer {
      * @param records new stream records to aggregate
      */
     private void aggregateRecords(List<MapRecord<String, Object, Object>> records) {
+        int consumed = 0;
         for (MapRecord<String, Object, Object> record : records) {
             Object queryObj = record.getValue().get(FIELD_QUERY);
             if (queryObj == null) {
@@ -187,6 +192,10 @@ public class SearchEventConsumer {
             // Atomically increment the count for this query
             aggregationMap.merge(query, 1L, Long::sum);
             pendingEventCount.incrementAndGet();
+            consumed++;
+        }
+        if (consumed > 0) {
+            metricsService.recordEventsConsumed(consumed);
         }
     }
 
@@ -252,8 +261,11 @@ public class SearchEventConsumer {
         // ── Persist to PostgreSQL ─────────────────────────────────────────────
         BatchPersistenceService.FlushStats stats = batchPersistenceService.persist(batch);
 
-        // ── Refresh Redis cache (runs after DB commit) ─────────────────────
+        // ── Refresh Redis cache (runs after DB commit) ─────────────────────────
         cacheRefreshService.refreshAfterFlush(batch.keySet());
+
+        // ── Record flush metrics ───────────────────────────────────────────────
+        metricsService.recordBatchFlush(totalEvents);
 
         log.info("BATCH FLUSH COMPLETED  rowsUpdated/Inserted={} durationMs={}",
                 stats.rowsProcessed(), stats.durationMs());

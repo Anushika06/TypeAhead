@@ -1,78 +1,38 @@
 package com.anushika.typeahead.cache;
 
+import com.anushika.typeahead.service.MetricsService;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 /**
- * Process-lifetime counters for Redis cache observability.
+ * Thin delegate that forwards cache hit/miss signals to {@link MetricsService}.
  *
- * <p>Counters are kept in {@link AtomicLong} fields so they are safe under
- * concurrent request handling without any locking.  They are intentionally
- * not persisted — they reset on application restart, which is acceptable
- * for a debugging / assignment demonstration tool.
- *
- * <p>Usage pattern:
- * <pre>
- *   // in SuggestionService
- *   if (cacheHit) {
- *       cacheMetrics.recordCacheHit();
- *   } else {
- *       cacheMetrics.recordCacheMiss();
- *   }
- * </pre>
- *
- * <p>Metrics are exposed via {@code GET /metrics} (future phase) and
- * surfaced alongside key inspection by {@code GET /cache/debug?prefix=}.
+ * <p>Kept as a separate {@code @Component} so that existing injection sites
+ * ({@code SuggestionService}) require no changes.  All counter state lives
+ * in {@link MetricsService} — this class holds no state of its own.
  */
 @Component
 public class CacheMetrics {
 
-    private final AtomicLong cacheHits   = new AtomicLong(0);
-    private final AtomicLong cacheMisses = new AtomicLong(0);
+    private final MetricsService metricsService;
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Recording
-    // ──────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Increments the cache-hit counter.
-     * Call this every time a prefix is found in Redis.
-     */
-    public void recordCacheHit() {
-        cacheHits.incrementAndGet();
+    public CacheMetrics(MetricsService metricsService) {
+        this.metricsService = metricsService;
     }
 
-    /**
-     * Increments the cache-miss counter.
-     * Call this every time a prefix is NOT found in Redis and the DB is queried.
-     */
-    public void recordCacheMiss() {
-        cacheMisses.incrementAndGet();
-    }
+    /** Forwards to {@link MetricsService#recordCacheHit()}. */
+    public void recordCacheHit()  { metricsService.recordCacheHit(); }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Reading
-    // ──────────────────────────────────────────────────────────────────────────
+    /** Forwards to {@link MetricsService#recordCacheMiss()}. */
+    public void recordCacheMiss() { metricsService.recordCacheMiss(); }
 
-    /** @return total number of cache hits since the last application restart */
-    public long getCacheHits() {
-        return cacheHits.get();
-    }
+    /** @return total cache hits (delegated to MetricsService) */
+    public long getCacheHits()    { return metricsService.getCacheHits(); }
 
-    /** @return total number of cache misses since the last application restart */
-    public long getCacheMisses() {
-        return cacheMisses.get();
-    }
+    /** @return total cache misses (delegated to MetricsService) */
+    public long getCacheMisses()  { return metricsService.getCacheMisses(); }
 
-    /**
-     * Convenience: total requests routed through the cache-aside path
-     * (hits + misses).  Requests that were rejected early (prefix &lt; 3 chars)
-     * are NOT counted.
-     *
-     * @return hits + misses
-     */
+    /** @return hits + misses */
     public long getTotalRequests() {
-        return cacheHits.get() + cacheMisses.get();
+        return metricsService.getCacheHits() + metricsService.getCacheMisses();
     }
 }

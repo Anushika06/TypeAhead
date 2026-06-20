@@ -1,6 +1,6 @@
 package com.anushika.typeahead.controller;
 
-import com.anushika.typeahead.cache.CacheMetrics;
+import com.anushika.typeahead.service.MetricsService;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,7 +20,7 @@ import java.util.Map;
  * <p>Endpoints:
  * <ul>
  *   <li>{@code GET /cache/debug?prefix=goo} — inspect a single ZSET key</li>
- *   <li>{@code GET /metrics}               — lifetime hit/miss counters</li>
+ *   <li>{@code GET /metrics}               — full system metrics snapshot</li>
  * </ul>
  */
 @RestController
@@ -31,12 +31,12 @@ public class CacheDebugController {
     private static final String KEY_NAMESPACE = "prefix:";
 
     private final StringRedisTemplate redisTemplate;
-    private final CacheMetrics cacheMetrics;
+    private final MetricsService metricsService;
 
     public CacheDebugController(StringRedisTemplate redisTemplate,
-                                CacheMetrics cacheMetrics) {
+                                MetricsService metricsService) {
         this.redisTemplate = redisTemplate;
-        this.cacheMetrics = cacheMetrics;
+        this.metricsService = metricsService;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -88,24 +88,26 @@ public class CacheDebugController {
     // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * Returns lifetime cache hit/miss counters accumulated since the last
-     * application restart.
+     * Returns a full snapshot of system-wide metrics accumulated since the
+     * last application restart.
      *
      * <p>Response:
      * <pre>
      * {
-     *   "cacheHits":     42,
-     *   "cacheMisses":    7,
-     *   "totalRequests": 49
+     *   "cacheHits":             1200,
+     *   "cacheMisses":            140,
+     *   "cacheHitRate":          89.5,
+     *   "dbReads":                300,
+     *   "dbWrites":                40,
+     *   "streamEventsPublished":  500,
+     *   "streamEventsConsumed":   500,
+     *   "batchFlushes":            12,
+     *   "avgFlushSize":           412
      * }
      * </pre>
      */
     @GetMapping("/metrics")
     public ResponseEntity<Map<String, Object>> metrics() {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("cacheHits",     cacheMetrics.getCacheHits());
-        body.put("cacheMisses",   cacheMetrics.getCacheMisses());
-        body.put("totalRequests", cacheMetrics.getTotalRequests());
-        return ResponseEntity.ok(body);
+        return ResponseEntity.ok(metricsService.getSnapshot());
     }
 }

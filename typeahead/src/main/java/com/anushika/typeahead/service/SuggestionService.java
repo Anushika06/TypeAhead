@@ -22,13 +22,16 @@ public class SuggestionService {
     private final SearchQueryRepository searchQueryRepository;
     private final SuggestionCacheService cacheService;
     private final CacheMetrics cacheMetrics;
+    private final MetricsService metricsService;
 
     public SuggestionService(SearchQueryRepository searchQueryRepository,
                              SuggestionCacheService cacheService,
-                             CacheMetrics cacheMetrics) {
+                             CacheMetrics cacheMetrics,
+                             MetricsService metricsService) {
         this.searchQueryRepository = searchQueryRepository;
         this.cacheService = cacheService;
         this.cacheMetrics = cacheMetrics;
+        this.metricsService = metricsService;
     }
 
     /**
@@ -68,6 +71,7 @@ public class SuggestionService {
         cacheMetrics.recordCacheMiss();
 
         // ── 2. Database fallback ──────────────────────────────────────────────
+        metricsService.recordDbRead();
         List<SuggestionResponse> results = searchQueryRepository
                 .findCandidatesByPrefix(normalised)
                 .stream()

@@ -40,9 +40,12 @@ public class BatchPersistenceService {
     private static final Logger log = LoggerFactory.getLogger(BatchPersistenceService.class);
 
     private final SearchQueryRepository repository;
+    private final MetricsService metricsService;
 
-    public BatchPersistenceService(SearchQueryRepository repository) {
+    public BatchPersistenceService(SearchQueryRepository repository,
+                                   MetricsService metricsService) {
         this.repository = repository;
+        this.metricsService = metricsService;
     }
 
     /**
@@ -73,6 +76,7 @@ public class BatchPersistenceService {
         }
 
         long durationMs = System.currentTimeMillis() - startMs;
+        metricsService.recordDbWrites(batch.size());
         return new FlushStats(batch.size(), durationMs);
     }
 
