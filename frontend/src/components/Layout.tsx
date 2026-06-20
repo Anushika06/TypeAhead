@@ -47,9 +47,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           {/* Subtitle */}
           <p className="text-slate-500 text-base md:text-lg font-normal max-w-xl mx-auto leading-relaxed">
-            Production-grade autocomplete backed by{' '}
-            <span className="text-slate-400">trie-indexed</span>,{' '}
-            <span className="text-slate-400">score-ranked</span>{' '}
+            Scalable typeahead search with{' '}
+            <span className="text-slate-400">distributed caching, stream processing</span>,{' '}
+            <span className="text-slate-400">and intelligent ranking.</span>{' '}
             search queries.
           </p>
         </header>
