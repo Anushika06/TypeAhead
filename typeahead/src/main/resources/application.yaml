@@ -31,3 +31,10 @@ cache:
     # On expiry the next /suggest call will be a cache miss → PostgreSQL fallback.
     ttl-minutes: 60
 
+# ── Scheduler settings ────────────────────────────────────────────────────────
+scheduler:
+  decay:
+    # Cron expression for trend score decay (Spring 6-field format: s m h d M wd).
+    # Development : every 1 minute  → "0 * * * * *"
+    # Production  : nightly at 2 AM → "0 0 2 * * *"
+    cron: "0 0 2 * * *"
