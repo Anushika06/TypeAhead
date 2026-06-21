@@ -37,8 +37,6 @@ import java.util.Map;
 @Service
 public class BatchPersistenceService {
 
-    private static final Logger log = LoggerFactory.getLogger(BatchPersistenceService.class);
-
     private final SearchQueryRepository repository;
     private final MetricsService metricsService;
 

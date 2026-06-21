@@ -36,8 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class TrendDecayService {
 
-    private static final Logger log = LoggerFactory.getLogger(TrendDecayService.class);
-
     private final SearchQueryRepository repository;
 
     public TrendDecayService(SearchQueryRepository repository) {
