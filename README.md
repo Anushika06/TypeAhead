@@ -373,7 +373,7 @@ CREATE USER postgres WITH PASSWORD 'your_password';
 GRANT ALL PRIVILEGES ON DATABASE typeahead TO postgres;
 ```
 
-> Update `application.yaml` with your local PostgreSQL credentials.
+> Copy `typeahead/src/main/resources/application.yaml.example` to `typeahead/src/main/resources/application.yaml` and update it with your local PostgreSQL credentials.
 
 ### 3. Start the Backend
 Navigate to the `typeahead` directory:

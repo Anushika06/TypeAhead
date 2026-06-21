@@ -3,6 +3,7 @@ package com.anushika.typeahead.stream;
 import com.anushika.typeahead.cache.CacheRefreshService;
 import com.anushika.typeahead.service.BatchPersistenceService;
 import com.anushika.typeahead.service.MetricsService;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.connection.stream.MapRecord;
@@ -81,6 +82,7 @@ public class SearchEventConsumer {
     private final BatchPersistenceService batchPersistenceService;
     private final CacheRefreshService cacheRefreshService;
     private final MetricsService metricsService;
+    private final ConsumerOffsetService offsetService;
 
     /**
      * In-memory aggregation map: query → total count increment since last flush.
@@ -99,9 +101,23 @@ public class SearchEventConsumer {
     /**
      * The Redis Stream record ID of the last event consumed.
      * Passed to the next {@code XREAD} call so we only read new events.
-     * Starts at {@code "0-0"} to include all pre-existing stream records.
+     *
+     * <p>Initialised from the durable Redis offset in {@link #init()} so that
+     * restarts resume from the last successfully committed position rather
+     * than replaying the entire stream history from {@code 0-0}.
      */
-    private volatile String lastReadId = "0-0";
+    private volatile String lastReadId;
+
+    /**
+     * The highest stream record ID that has been included in the current
+     * (not-yet-flushed) aggregation window.
+     *
+     * <p>This is the value written to Redis after a successful flush so that
+     * the <em>next</em> restart begins exactly after the last committed event.
+     * It is updated inside {@link #aggregateRecords} and consumed inside
+     * {@link #flush}.
+     */
+    private volatile String latestAggregatedId;
 
     /** Timestamp of the most recent flush (or application startup). */
     private volatile Instant lastFlushTime = Instant.now();
@@ -109,11 +125,27 @@ public class SearchEventConsumer {
     public SearchEventConsumer(StringRedisTemplate redisTemplate,
                                BatchPersistenceService batchPersistenceService,
                                CacheRefreshService cacheRefreshService,
-                               MetricsService metricsService) {
+                               MetricsService metricsService,
+                               ConsumerOffsetService offsetService) {
         this.redisTemplate = redisTemplate;
         this.batchPersistenceService = batchPersistenceService;
         this.cacheRefreshService = cacheRefreshService;
         this.metricsService = metricsService;
+        this.offsetService = offsetService;
+    }
+
+    /**
+     * Loads the durable consumer offset from Redis on startup.
+     *
+     * <p>This runs after dependency injection but before the first
+     * {@link #pollAndAggregate()} tick, ensuring the scheduler always starts
+     * from the correct position in the stream.
+     */
+    @PostConstruct
+    public void init() {
+        String saved = offsetService.getLastProcessedId();
+        lastReadId        = saved;
+        latestAggregatedId = saved;
     }
 
     // ── Poll loop ─────────────────────────────────────────────────────────────
@@ -171,8 +203,14 @@ public class SearchEventConsumer {
     }
 
     /**
-     * Accumulates each record's query into the aggregation map.
-     * Duplicate queries are merged by summing their counts.
+     * Accumulates each record's query into the aggregation map and advances
+     * {@link #latestAggregatedId} to the highest record ID seen.
+     *
+     * <p>{@code latestAggregatedId} is deliberately updated here — not in
+     * {@link #readNewRecords()} — so it always reflects the last event that
+     * was actually added to the aggregation window, not merely read from the
+     * stream.  The value is written to Redis only after a successful flush,
+     * giving us an at-least-once guarantee without skipping unprocessed events.
      *
      * @param records new stream records to aggregate
      */
@@ -193,6 +231,9 @@ public class SearchEventConsumer {
             aggregationMap.merge(query, 1L, Long::sum);
             pendingEventCount.incrementAndGet();
             consumed++;
+
+            // Track the watermark of the current aggregation window
+            latestAggregatedId = record.getId().getValue();
         }
         if (consumed > 0) {
             metricsService.recordEventsConsumed(consumed);
@@ -222,15 +263,24 @@ public class SearchEventConsumer {
     }
 
     /**
-     * Drains the aggregation map, logs the batch, resets all counters, and
-     * records the flush timestamp.
+     * Drains the aggregation map, persists to PostgreSQL, refreshes the cache,
+     * and — only on full success — advances the durable consumer offset in Redis.
      *
      * <p>The map is swapped atomically by replacing it with a local snapshot,
      * so events arriving during the flush are captured in the next batch.
      *
+     * <p>The offset is saved as the final step so that a crash anywhere earlier
+     * in the pipeline leaves the offset unchanged; the events will be
+     * re-aggregated on the next restart (at-least-once semantics, safe because
+     * the UPSERT is idempotent).
+     *
      * @param reason human-readable trigger description for the log
      */
     private void flush(String reason) {
+        // Capture the watermark of the events about to be flushed.
+        // latestAggregatedId is volatile, so we snapshot it before draining.
+        String offsetToSave = latestAggregatedId;
+
         // Snapshot and clear the map atomically by draining into a local copy
         Map<String, Long> batch = new HashMap<>();
         aggregationMap.forEach((query, count) -> {
@@ -269,5 +319,12 @@ public class SearchEventConsumer {
 
         log.info("BATCH FLUSH COMPLETED  rowsUpdated/Inserted={} durationMs={}",
                 stats.rowsProcessed(), stats.durationMs());
+
+        // ── Persist consumer offset (MUST be last) ────────────────────────────
+        // Only reached if DB + cache refresh succeeded. Crashing before this
+        // point leaves the offset unchanged so events are safely re-processed.
+        if (offsetToSave != null) {
+            offsetService.saveLastProcessedId(offsetToSave);
+        }
     }
 }
