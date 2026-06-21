@@ -7,17 +7,17 @@ import {
 } from 'lucide-react';
 import { metricsApi, type MetricsData } from '../api/metricsApi';
 
-// ── Polling interval ────────────────────────────────────────────────────────
+
 const POLL_INTERVAL_MS = 10_000;
 
-// ── Number formatter ────────────────────────────────────────────────────────
+
 function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
 
-// ── Skeleton card ───────────────────────────────────────────────────────────
+
 const SkeletonCard: React.FC = () => (
   <div className="flex items-center gap-4 px-4 py-3 rounded-xl">
     <div className="skeleton w-8 h-8 rounded-lg shrink-0" />
@@ -29,7 +29,7 @@ const SkeletonCard: React.FC = () => (
   </div>
 );
 
-// ── Metric row shape ────────────────────────────────────────────────────────
+
 interface MetricRow {
   label:     string;
   value:     string;
@@ -108,7 +108,7 @@ function buildMetricRows(d: MetricsData): MetricRow[] {
   ];
 }
 
-// ── Component ───────────────────────────────────────────────────────────────
+
 export const SystemMetrics: React.FC = () => {
   const [data,      setData]      = useState<MetricsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -126,7 +126,7 @@ export const SystemMetrics: React.FC = () => {
     }
   }, []);
 
-  // Initial load + polling every 10 s
+
   useEffect(() => {
     fetchMetrics();
     const id = setInterval(fetchMetrics, POLL_INTERVAL_MS);
@@ -138,7 +138,7 @@ export const SystemMetrics: React.FC = () => {
   return (
     <GlassCard className="flex-1">
 
-      {/* ── Header ── */}
+
       <div className="flex items-center gap-3 mb-5">
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/15 ring-1 ring-emerald-500/20 shrink-0">
           <Activity className="w-4 h-4 text-emerald-400" />
@@ -149,21 +149,21 @@ export const SystemMetrics: React.FC = () => {
           <p className="text-[11px] text-slate-600 mt-0.5">Refreshes every 10 s</p>
         </div>
 
-        {/* Real-time badge */}
+
         <span className="ml-auto flex items-center gap-1.5 badge bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 text-[10px] shrink-0">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
           Real-time
         </span>
       </div>
 
-      {/* ── Loading skeletons ── */}
+
       {isLoading && (
         <div className="space-y-1">
           {[...Array(8)].map((_, i) => <SkeletonCard key={i} />)}
         </div>
       )}
 
-      {/* ── Error state ── */}
+
       {!isLoading && error && (
         <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-rose-500/10 ring-1 ring-rose-500/20">
@@ -183,7 +183,7 @@ export const SystemMetrics: React.FC = () => {
         </div>
       )}
 
-      {/* ── Metric rows ── */}
+
       {!isLoading && !error && rows.length > 0 && (
         <div className="space-y-1">
           {rows.map((m, i) => (
@@ -198,7 +198,7 @@ export const SystemMetrics: React.FC = () => {
               )}
               style={{ animationDelay: `${i * 35}ms`, animationFillMode: 'both' }}
             >
-              {/* Icon */}
+
               <div className={cn(
                 'flex items-center justify-center w-8 h-8 rounded-lg ring-1 shrink-0',
                 m.accent,
@@ -207,7 +207,7 @@ export const SystemMetrics: React.FC = () => {
                 {m.icon}
               </div>
 
-              {/* Label + sub-label */}
+
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-500 font-medium leading-none truncate">
                   {m.label}
@@ -217,7 +217,7 @@ export const SystemMetrics: React.FC = () => {
                 </p>
               </div>
 
-              {/* Value */}
+
               <span className="text-sm font-semibold text-slate-200 font-mono tabular-nums shrink-0">
                 {m.value}
               </span>

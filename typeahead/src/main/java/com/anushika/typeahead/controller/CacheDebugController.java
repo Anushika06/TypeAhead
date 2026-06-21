@@ -23,24 +23,6 @@ import java.util.Map;
 
 /**
  * Debugging, observability, and consistent-hashing demonstration endpoints.
- *
- * <p>These endpoints exist purely for assignment demonstration and
- * operational insight — they are NOT part of the public suggestion API.
- *
- * <p>Endpoints:
- * <ul>
- *   <li>{@code GET /cache/debug?prefix=goo} — inspect ZSET + show assigned node</li>
- *   <li>{@code GET /cache/ring}             — visualise the consistent hashing ring</li>
- *   <li>{@code GET /metrics}               — full system metrics snapshot</li>
- * </ul>
- *
- * <h2>Routing consistency</h2>
- * {@code GET /cache/debug} resolves the node via the same
- * {@link ConsistentHashRing#getNode(String)} call used by
- * {@link com.anushika.typeahead.cache.SuggestionCacheService} and
- * {@link com.anushika.typeahead.cache.CacheRefreshService}.
- * The {@code assignedNode} field therefore reflects the actual routing used
- * during live cache operations — there is no special-case logic.
  */
 @CrossOrigin(origins = "http://localhost:5173")
 @RestController
@@ -60,38 +42,13 @@ public class CacheDebugController {
         this.metricsService = metricsService;
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // GET /cache/debug?prefix=<prefix>
-    // ──────────────────────────────────────────────────────────────────────────
+
 
     /**
      * Inspects the Redis ZSET for a given prefix and shows which consistent-hash
      * ring node is responsible for storing it.
      *
-     * <p>Node resolution uses {@link ConsistentHashRing#getNode(String)} — the
-     * same call made by all live cache operations — ensuring the {@code assignedNode}
-     * in this response always matches the routing used in production.
-     *
-     * <p>Response when the key exists:
-     * <pre>
-     * {
-     *   "prefix":          "goo",
-     *   "assignedNode":    "redis-node-2",
-     *   "cacheHit":        true,
-     *   "suggestionCount": 10
-     * }
-     * </pre>
-     *
-     * <p>Response when the key is absent:
-     * <pre>
-     * {
-     *   "prefix":       "goo",
-     *   "assignedNode": "redis-node-2",
-     *   "cacheHit":     false
-     * }
-     * </pre>
-     *
-     * @param prefix the search prefix to inspect (case-insensitive)
+     * @param prefix the search prefix to inspect
      */
     @Tag(name = "Cache Debug", description = "Endpoints for inspecting cache and hashing ring")
     @Operation(
@@ -110,7 +67,6 @@ public class CacheDebugController {
         String key           = CacheConstants.PREFIX_NAMESPACE + normalised;
         String assignedNode  = hashRing.getNode(normalised);
 
-        // ZCARD returns the member count of the sorted set, or null/0 if absent
         Long count      = redisTemplate.opsForZSet().size(key);
         boolean cacheHit = count != null && count > 0;
 
@@ -125,32 +81,11 @@ public class CacheDebugController {
         return ResponseEntity.ok(body);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // GET /cache/ring
-    // ──────────────────────────────────────────────────────────────────────────
+
 
     /**
      * Visualises the consistent hashing ring: node count, virtual node count,
      * load distribution, and sample key→node mappings.
-     *
-     * <p>Response shape:
-     * <pre>
-     * {
-     *   "physicalNodes":          3,
-     *   "virtualNodesPerPhysical": 150,
-     *   "totalRingPositions":     450,
-     *   "nodes": [
-     *     { "name": "redis-node-1", "virtualNodes": 150, "ownershipPercent": 33.3 },
-     *     ...
-     *   ],
-     *   "sampleMappings": {
-     *     "goo":    "redis-node-2",
-     *     "iph":    "redis-node-1",
-     *     "chatgpt": "redis-node-3",
-     *     ...
-     *   }
-     * }
-     * </pre>
      */
     @Tag(name = "Cache Debug")
     @Operation(
@@ -165,7 +100,6 @@ public class CacheDebugController {
         List<String> nodes            = hashRing.getPhysicalNodes();
         Map<String, Double> ownership = hashRing.getOwnershipPercentages();
 
-        // Build the per-node detail list
         List<Map<String, Object>> nodeDetails = new ArrayList<>();
         for (String node : nodes) {
             Map<String, Object> detail = new LinkedHashMap<>();
@@ -185,28 +119,10 @@ public class CacheDebugController {
         return ResponseEntity.ok(body);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // GET /metrics
-    // ──────────────────────────────────────────────────────────────────────────
+
 
     /**
-     * Returns a full snapshot of system-wide metrics accumulated since the
-     * last application restart.
-     *
-     * <p>Response:
-     * <pre>
-     * {
-     *   "cacheHits":             1200,
-     *   "cacheMisses":            140,
-     *   "cacheHitRate":          89.5,
-     *   "dbReads":                300,
-     *   "dbWrites":                40,
-     *   "streamEventsPublished":  500,
-     *   "streamEventsConsumed":   500,
-     *   "batchFlushCount":         12,
-     *   "avgFlushSize":           412
-     * }
-     * </pre>
+     * Returns a full snapshot of system-wide metrics accumulated since the last application restart.
      */
     @Tag(name = "Metrics", description = "System metrics endpoints")
     @Operation(

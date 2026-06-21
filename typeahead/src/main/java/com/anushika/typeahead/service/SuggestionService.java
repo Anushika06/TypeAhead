@@ -37,31 +37,15 @@ public class SuggestionService {
     }
 
     /**
-     * Returns up to 10 suggestions for the given prefix using Cache Aside:
-     *
-     * <ol>
-     *   <li>Normalise prefix (trim + lowercase).</li>
-     *   <li>Return immediately if prefix is shorter than MIN_PREFIX_LENGTH.</li>
-     *   <li>Check Redis — on hit, return cached results directly.</li>
-     *   <li>On miss, query PostgreSQL, compute scores, populate Redis, return.</li>
-     * </ol>
-     *
-     * Ranking formula:
-     *   score = log(total_count + 1) + log(trend_score + 1)
-     *
-     * The API contract is preserved: callers always receive a
-     * {@code List<SuggestionResponse>} regardless of whether the result
-     * came from cache or database.
+     * Returns up to 10 suggestions for the given prefix using Cache Aside.
      */
     public List<SuggestionResponse> getSuggestions(String prefix) {
         if (prefix == null || prefix.trim().length() < CacheConstants.MIN_PREFIX_LENGTH) {
             return List.of();
         }
 
-        // Normalise: trim whitespace and lowercase so "Goo" and "goo" share the same key
         String normalised = prefix.trim().toLowerCase();
 
-        // ── 1. Cache check ────────────────────────────────────────────────────
         List<SuggestionResponse> cached = cacheService.getSuggestions(normalised);
         if (!cached.isEmpty()) {
             log.info("CACHE HIT  prefix={}", normalised);
@@ -72,7 +56,6 @@ public class SuggestionService {
         log.info("CACHE MISS prefix={}", normalised);
         cacheMetrics.recordCacheMiss();
 
-        // ── 2. Database fallback ──────────────────────────────────────────────
         metricsService.recordDbRead();
         List<SuggestionResponse> results = searchQueryRepository
                 .findCandidatesByPrefix(normalised)
@@ -85,7 +68,6 @@ public class SuggestionService {
                 .limit(CacheConstants.TOP_K)
                 .toList();
 
-        // ── 3. Populate cache ─────────────────────────────────────────────────
         // Fire-and-forget: cacheSuggestions swallows its own exceptions so a
         // Redis write failure never affects the response returned to the caller.
         cacheService.cacheSuggestions(normalised, results);

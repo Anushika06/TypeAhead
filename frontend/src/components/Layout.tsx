@@ -8,7 +8,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen px-4 py-16 md:py-24 flex flex-col items-center">
 
-      {/* ── Top noise/grid texture overlay ── */}
+
       <div
         aria-hidden
         className="pointer-events-none fixed inset-0 z-0"
@@ -19,10 +19,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       <div className="relative z-10 w-full max-w-4xl flex flex-col items-center">
 
-        {/* ── Header ── */}
+
         <header className="mb-14 text-center w-full">
 
-          {/* Dataset badge */}
+
           <div className="mb-6 flex justify-center">
             <span className="badge glass stripe-top text-slate-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -30,7 +30,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </span>
           </div>
 
-          {/* Main title */}
+
           <h1 className="text-[2.75rem] md:text-6xl font-extrabold tracking-[-0.03em] leading-none mb-4">
             <span className="text-white">TypeAhead</span>
             {' '}
@@ -54,12 +54,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </p>
         </header>
 
-        {/* ── Main content ── */}
         <main className="w-full flex flex-col gap-6">
           {children}
         </main>
 
-        {/* ── Footer ── */}
         <footer className="mt-16 text-center text-slate-700 text-xs">
           TypeAhead Engine &nbsp;·&nbsp; Built with React + Spring Boot
         </footer>

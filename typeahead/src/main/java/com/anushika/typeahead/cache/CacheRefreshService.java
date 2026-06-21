@@ -16,37 +16,6 @@ import java.util.Set;
 
 /**
  * Updates Redis Sorted Set caches after a successful PostgreSQL batch flush.
- *
- * <h2>Why here, not in {@link SuggestionCacheService}?</h2>
- * {@link SuggestionCacheService} manages full-prefix cache reads and writes
- * for the read path ({@code GET /suggest}).  This class handles the
- * post-flush <em>incremental update</em> of individual query scores across
- * multiple prefix keys — a distinct concern owned by the write pipeline.
- *
- * <h2>Consistent Hashing — Node Routing</h2>
- * For every prefix key that must be updated, {@link ConsistentHashRing#getNode(String)}
- * is called to determine which logical node owns that prefix.  The assignment is
- * logged before every write so routing is fully observable.
- *
- * <p>Each prefix in a single query update may resolve to a <em>different</em>
- * logical node — this is correct and intentional.  The ring determines ownership.
- *
- * <h2>Algorithm for each flushed query</h2>
- * <ol>
- *   <li>Fetch the current row from PostgreSQL (post-commit values).</li>
- *   <li>Recompute ranking score:
- *       {@code score = log(total_count + 1) + log(trend_score + 1)}.</li>
- *   <li>Generate every prefix of length ≥ 3 up to the full query length.
- *       Example: {@code "google"} → {@code ["goo","goog","googl","google"]}.</li>
- *   <li>For each prefix: resolve the owning node, then
- *       {@code ZADD prefix:<p> score query} and trim to top-{@value #TOP_K}.</li>
- * </ol>
- *
- * <h2>Consistency guarantee</h2>
- * This method is called only after {@code BatchPersistenceService.persist()}
- * has committed its transaction.  If a Redis update fails, the error is
- * logged and swallowed — the next {@code GET /suggest} cache miss will
- * self-heal by re-reading from PostgreSQL and re-populating the key.
  */
 @Service
 public class CacheRefreshService {
@@ -68,15 +37,10 @@ public class CacheRefreshService {
         this.rankingService = rankingService;
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Public API
-    // ──────────────────────────────────────────────────────────────────────────
+
 
     /**
      * Refreshes all Redis prefix ZSETs affected by the queries in the batch.
-     *
-     * <p>Must be called after {@code BatchPersistenceService.persist()} has
-     * committed — only then do the DB rows reflect the incremented counts.
      *
      * @param queries set of normalised query strings that were flushed to DB
      */
@@ -85,7 +49,6 @@ public class CacheRefreshService {
             return;
         }
 
-        // Fetch all updated rows in one DB round-trip
         List<SearchQuery> rows = repository.findAllById(queries);
 
         if (rows.isEmpty()) {
@@ -109,16 +72,10 @@ public class CacheRefreshService {
                 rows.size(), prefixKeysUpdated);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Private helpers
-    // ──────────────────────────────────────────────────────────────────────────
+
 
     /**
-     * Updates every prefix ZSET for a single query and returns the number
-     * of prefix keys that were touched.
-     *
-     * <p>Each prefix is independently routed through the consistent hash ring.
-     * The assigned node is logged before every write.
+     * Updates every prefix ZSET for a single query and returns the number of prefix keys that were touched.
      *
      * @param row fresh DB row for the query
      * @return number of prefix keys updated
@@ -153,14 +110,7 @@ public class CacheRefreshService {
 
 
     /**
-     * Generates all prefixes of {@code query} with length in
-     * [{@value #MIN_PREFIX_LEN}, query.length()], inclusive.
-     *
-     * <p>Example: {@code "google"} →
-     * {@code ["goo", "goog", "googl", "google"]}.
-     *
-     * <p>Queries shorter than {@value #MIN_PREFIX_LEN} characters produce an
-     * empty list — they cannot be retrieved via {@code GET /suggest} anyway.
+     * Generates all prefixes of query with length in [MIN_PREFIX_LEN, query.length()], inclusive.
      *
      * @param query normalised (lowercase, trimmed) query string
      * @return ordered list of prefix strings, shortest first

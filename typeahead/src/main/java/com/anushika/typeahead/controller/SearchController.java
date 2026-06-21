@@ -16,27 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Map;
 
 /**
- * Write-path controller: records a user search event.
- *
- * <p>The request thread does only two things:
- * <ol>
- *   <li>Validate and deserialise the request body.</li>
- *   <li>Publish the event to Redis Streams via {@link SearchService}.</li>
- * </ol>
- *
- * <p>No database I/O happens in the request thread. PostgreSQL will be
- * updated asynchronously by a stream consumer (implemented in the next phase).
- *
- * <h2>Contract</h2>
- * <pre>
- * POST /search
- * Content-Type: application/json
- *
- * { "query": "google" }
- *
- * 200 OK
- * { "message": "Searched" }
- * </pre>
+ * Write-path controller: records user search events.
  */
 @Tag(name = "Search Events", description = "Asynchronous search submission endpoints")
 @CrossOrigin(origins = "http://localhost:5173")
@@ -52,11 +32,8 @@ public class SearchController {
     /**
      * Records a search query by publishing it to the Redis Stream.
      *
-     * <p>Returns immediately after publishing — the actual PostgreSQL update
-     * is deferred to the async consumer.
-     *
-     * @param request validated request body containing the raw query string
-     * @return {@code 200 OK} with {@code {"message":"Searched"}}
+     * @param request validated request body containing the raw query string.
+     * @return 200 OK with message.
      */
     @Operation(
             summary = "Record a search event",

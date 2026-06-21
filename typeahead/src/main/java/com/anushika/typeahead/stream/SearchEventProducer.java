@@ -11,27 +11,6 @@ import java.util.Map;
 
 /**
  * Publishes search query events to the Redis Stream {@value #STREAM_NAME}.
- *
- * <h2>Redis Streams — why?</h2>
- * <ul>
- *   <li>Fire-and-forget for the request thread: {@code XADD} is O(1) and
- *       returns immediately with the auto-generated record ID.</li>
- *   <li>Durable log: events are persisted in Redis until explicitly trimmed
- *       or acknowledged, unlike Pub/Sub which drops messages for
- *       offline consumers.</li>
- *   <li>Consumer groups (added later) allow multiple workers to share
- *       the batch-update load without duplicate processing.</li>
- * </ul>
- *
- * <h2>Event payload</h2>
- * <pre>
- * Stream:  search_events
- * Fields:
- *   query  →  normalised search term   e.g. "google"
- * </pre>
- *
- * <p>The producer does NOT update PostgreSQL or invalidate any cache.
- * Those responsibilities belong to the consumer (implemented later).
  */
 @Component
 public class SearchEventProducer {
@@ -54,20 +33,12 @@ public class SearchEventProducer {
     }
 
     /**
-     * Publishes a single search event into the {@value #STREAM_NAME} stream.
-     *
-     * <p>Internally issues {@code XADD search_events * query <normalised>}.
-     * The {@code *} wildcard lets Redis auto-generate a monotonic record ID
-     * (millisecond timestamp + sequence).
-     *
-     * <p>On any Redis error the exception is logged and swallowed — a failed
-     * stream publish must not degrade the user-facing response.
+     * Publishes a single search event into the stream.
      *
      * @param normalisedQuery lowercase, trimmed search term
      */
     public void publish(String normalisedQuery) {
         try {
-            // XADD search_events * query <normalisedQuery>
             RecordId recordId = redisTemplate
                     .opsForStream()
                     .add(STREAM_NAME, Map.of(FIELD_QUERY, normalisedQuery));

@@ -13,42 +13,6 @@ import java.util.Set;
 
 /**
  * Cache abstraction for typeahead suggestions backed by Redis Sorted Sets (ZSET).
- *
- * <h2>Data model</h2>
- * <pre>
- * Key:    prefix:{prefix}           e.g. prefix:goo
- * Type:   ZSET (Sorted Set)
- * Member: the suggestion string     e.g. "google", "google maps"
- * Score:  computed rank             e.g. 19.62
- *
- * Score formula (computed upstream, not here):
- *   score = log(total_count + 1) + log(trend_score + 1)
- * </pre>
- *
- * <h2>Consistent Hashing — Node Routing</h2>
- * Every cache operation calls {@link ConsistentHashRing#getNode(String)} with the
- * prefix to determine which logical cache node owns that key.  The assigned node
- * is logged before every Redis operation so routing is fully observable.
- *
- * <p>All three logical nodes ({@code redis-node-1}, {@code redis-node-2},
- * {@code redis-node-3}) are registered on the ring.  In development they share
- * a single local Redis connection — the routing logic is real even though the
- * physical connection is shared.
- *
- * <h2>Why ZSET?</h2>
- * <ul>
- *   <li><b>ZADD</b> is idempotent — re-caching the same prefix simply
- *       overwrites scores in O(M log N).</li>
- *   <li><b>ZREVRANGE</b> returns top-k members already sorted
- *       highest-score-first in O(log N + k).</li>
- *   <li>Scores can be updated individually after a batch flush without
- *       rebuilding the entire key.</li>
- * </ul>
- *
- * <h2>TTL</h2>
- * No TTL is set on cache entries.  Keys live until explicitly removed by
- * {@link #evictPrefix(String)}, which is called during PostgreSQL batch
- * updates.  Time-based expiry will be added in a later phase if needed.
  */
 @Service
 public class SuggestionCacheService {
@@ -64,25 +28,12 @@ public class SuggestionCacheService {
         this.redisTemplate = redisTemplate;
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Public API
-    // ──────────────────────────────────────────────────────────────────────────
+
 
     /**
      * Writes a ranked list of suggestions for the given prefix into Redis.
      *
-     * <p>The prefix is first routed through the consistent hash ring to determine
-     * the owning logical node, which is logged before the write.
-     *
-     * <p>Each {@link SuggestionResponse#query()} becomes a ZSET member and
-     * {@link SuggestionResponse#score()} becomes its ZSET score.  The entire
-     * key is replaced atomically by deleting first then bulk-adding via
-     * {@code ZADD}, so a re-cache never leaves stale members behind.
-     *
-     * <p>No TTL is set.  Cache entries persist until explicitly evicted by
-     * {@link #evictPrefix(String)}.
-     *
-     * @param prefix      lowercase search prefix (e.g. {@code "goo"})
+     * @param prefix      lowercase search prefix
      * @param suggestions ranked list from PostgreSQL, highest score first
      */
     public void cacheSuggestions(String prefix, List<SuggestionResponse> suggestions) {
@@ -115,16 +66,9 @@ public class SuggestionCacheService {
     }
 
     /**
-     * Retrieves the top-{@value #TOP_K} suggestions for the given prefix from Redis.
+     * Retrieves the top suggestions for the given prefix from Redis.
      *
-     * <p>The prefix is first routed through the consistent hash ring to determine
-     * the owning logical node, which is logged before the read.
-     *
-     * <p>Uses {@code ZREVRANGEBYSCORE} semantics via
-     * {@link ZSetOperations#reverseRangeWithScores} so members are returned
-     * highest-score-first, matching the PostgreSQL ordering.
-     *
-     * @param prefix lowercase search prefix (e.g. {@code "goo"})
+     * @param prefix lowercase search prefix
      * @return ordered list of suggestions, or an empty list on a cache miss
      */
     public List<SuggestionResponse> getSuggestions(String prefix) {
@@ -138,7 +82,6 @@ public class SuggestionCacheService {
         String key = buildKey(prefix);
 
         try {
-            // ZREVRANGE key 0 (TOP_K - 1) WITHSCORES — highest score first
             Set<ZSetOperations.TypedTuple<String>> tuples =
                     redisTemplate.opsForZSet().reverseRangeWithScores(key, 0, CacheConstants.TOP_K - 1);
 
@@ -167,13 +110,7 @@ public class SuggestionCacheService {
     /**
      * Removes the ZSET key for the given prefix from Redis.
      *
-     * <p>The prefix is first routed through the consistent hash ring to determine
-     * the owning logical node, which is logged before the delete.
-     *
-     * <p>Intended for use after a PostgreSQL batch flush to force a fresh
-     * cache population on the next request.
-     *
-     * @param prefix lowercase search prefix (e.g. {@code "goo"})
+     * @param prefix lowercase search prefix
      */
     public void evictPrefix(String prefix) {
         if (prefix == null || prefix.isBlank()) {
@@ -195,18 +132,13 @@ public class SuggestionCacheService {
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ──────────────────────────────────────────────────────────────────────────
+
 
     /**
      * Builds the canonical Redis key for a prefix.
      *
-     * <p>Keys are always lower-cased to match the case-insensitive behaviour
-     * of the suggestion API.
-     *
      * @param prefix raw search prefix
-     * @return Redis key, e.g. {@code "prefix:goo"}
+     * @return Redis key
      */
     private String buildKey(String prefix) {
         return CacheConstants.PREFIX_NAMESPACE + prefix.toLowerCase();

@@ -4,11 +4,7 @@ import com.anushika.typeahead.service.MetricsService;
 import org.springframework.stereotype.Component;
 
 /**
- * Thin delegate that forwards cache hit/miss signals to {@link MetricsService}.
- *
- * <p>Kept as a separate {@code @Component} so that existing injection sites
- * ({@code SuggestionService}) require no changes.  All counter state lives
- * in {@link MetricsService} — this class holds no state of its own.
+ * Thin delegate that forwards cache hit/miss signals to MetricsService.
  */
 @Component
 public class CacheMetrics {

@@ -13,12 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.util.Map;
 
-/**
- * Lightweight health-check endpoints.
- *
- * <p>Kept separate from the suggestion API so ops tooling can probe
- * infrastructure without touching any business logic.
- */
+
 @Tag(name = "Health", description = "System health check endpoints")
 @RestController
 @RequestMapping("/health")
@@ -59,12 +54,7 @@ public class HealthController {
     /**
      * GET /health/redis
      *
-     * <p>Opens a connection to Redis and sends a PING command.
-     * Returns {@code {"status":"ok"}} on success, or
-     * {@code {"status":"error","detail":"..."}} with HTTP 503
-     * if the connection cannot be established.
-     *
-     * <p>This is a connectivity probe only — no caching logic is exercised.
+     * Opens a connection to Redis and sends a PING command.
      */
     @Operation(
             summary = "Redis health check",
@@ -76,7 +66,6 @@ public class HealthController {
     @GetMapping("/redis")
     public ResponseEntity<Map<String, String>> checkRedis() {
         try {
-            // Borrow a connection and issue PING — throws on any connectivity failure
             redisConnectionFactory.getConnection().ping();
             return ResponseEntity.ok(Map.of("status", "ok"));
         } catch (Exception ex) {

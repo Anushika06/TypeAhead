@@ -12,10 +12,7 @@ import java.util.List;
 @Repository
 public interface SearchQueryRepository extends JpaRepository<SearchQuery, String> {
 
-    // JpaRepository provides:
-    //   count()     → used by /health/db
-    //   save()      → upsert a single row
-    //   saveAll()   → batch upsert (used by batch flush worker)
+
 
     /**
      * Fetches up to 100 candidate rows whose query starts with the given prefix
@@ -38,19 +35,7 @@ public interface SearchQueryRepository extends JpaRepository<SearchQuery, String
     /**
      * Atomic UPSERT for a single query + count increment.
      *
-     * <p>On INSERT: creates a new row with both {@code total_count} and
-     * {@code trend_score} set to {@code countIncrement}, and timestamps
-     * {@code last_decay_at} and {@code updated_at} to NOW().
-     *
-     * <p>On UPDATE (conflict on {@code query}): increments both
-     * {@code total_count} and {@code trend_score} by {@code countIncrement}
-     * and refreshes {@code updated_at} to NOW().  {@code last_decay_at} is
-     * intentionally NOT updated — the decay scheduler owns that column.
-     *
-     * <p>Must be called inside a transaction (handled by
-     * {@code BatchPersistenceService}).
-     *
-     * @param query          the normalised search term (lowercase, trimmed)
+     * @param query          the normalised search term
      * @param countIncrement number of times this query was searched in the batch
      */
     @Modifying
@@ -67,16 +52,7 @@ public interface SearchQueryRepository extends JpaRepository<SearchQuery, String
                      @Param("countIncrement") long countIncrement);
 
     /**
-     * Applies a single decay pass to all rows whose {@code last_decay_at}
-     * timestamp is older than 20 hours.
-     *
-     * <p>The 20-hour guard prevents accidental double-decay if the scheduler
-     * fires more than once within a decay window (e.g. during a restart).
-     *
-     * <p>Formula: {@code trend_score = trend_score * 0.9}
-     *
-     * <p>Must be called inside a transaction (handled by
-     * {@code TrendDecayService}).
+     * Applies a single decay pass to all rows.
      *
      * @return number of rows whose trend_score was updated
      */
@@ -90,11 +66,7 @@ public interface SearchQueryRepository extends JpaRepository<SearchQuery, String
     int decayTrendScores();
 
     /**
-     * Returns the top 5 queries ranked by the logarithmic scoring formula:
-     * {@code score = LN(total_count + 1) + LN(trend_score + 1)}
-     *
-     * <p>The same formula is used by {@code SuggestionService} so trending
-     * rankings are consistent with autocomplete rankings.
+     * Returns the top 5 queries ranked by the logarithmic scoring formula.
      *
      * @return up to 5 rows ordered highest-score-first
      */

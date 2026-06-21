@@ -8,22 +8,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Returns the top 5 trending queries ranked by the logarithmic scoring formula.
- *
- * <h2>Formula</h2>
- * <pre>
- * score = log(total_count + 1) + log(trend_score + 1)
- * </pre>
- *
- * <p>Mirrors the formula in {@code SuggestionService} so trending rankings
- * are consistent with autocomplete rankings.  Ranking is delegated to
- * PostgreSQL so the result is already sorted when it arrives.
- *
- * <h2>Why a dedicated service?</h2>
- * Trending is a fundamentally different read concern from autocomplete:
- * no prefix filtering, full-table scan sorted by score, small fixed result set.
- * Keeping it separate prevents the suggestion service from accumulating
- * unrelated concerns.
+ * Returns the top trending queries ranked by the logarithmic scoring formula.
  */
 @Service
 public class TrendingService {
@@ -53,7 +38,7 @@ public class TrendingService {
     }
 
     /**
-     * Ranking formula — mirrors {@code SuggestionService.computeScore()}.
+     * Ranking formula.
      *
      * @param totalCount cumulative search count
      * @param trendScore decaying recency signal

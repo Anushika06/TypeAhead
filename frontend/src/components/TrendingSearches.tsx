@@ -3,14 +3,14 @@ import { GlassCard, cn } from './GlassCard';
 import { TrendingUp, Flame, RefreshCw, AlertCircle } from 'lucide-react';
 import { trendingApi, type TrendingItem } from '../api/trendingApi';
 
-// ── Rank badge colours ──────────────────────────────────────────────────────
+
 const rankBadgeClass = (rank: number) =>
   rank === 1 ? 'bg-amber-400/20  text-amber-300  ring-amber-400/30'  :
   rank === 2 ? 'bg-slate-300/15  text-slate-300  ring-slate-400/20'  :
   rank === 3 ? 'bg-orange-400/20 text-orange-300 ring-orange-400/30' :
                'bg-white/[0.04]  text-slate-500  ring-white/[0.06]';
 
-// ── Skeleton row ────────────────────────────────────────────────────────────
+
 const SkeletonRow: React.FC = () => (
   <li className="flex items-center gap-3 px-3 py-3">
     <div className="skeleton w-7 h-7 rounded-lg shrink-0" />
@@ -22,14 +22,14 @@ const SkeletonRow: React.FC = () => (
   </li>
 );
 
-// ── Formats a large integer nicely, e.g. 32532 → "32.5 K" ──────────────────
+
 function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} M`;
   if (n >= 1_000)     return `${(n / 1_000).toFixed(1)} K`;
   return String(n);
 }
 
-// ── Component ───────────────────────────────────────────────────────────────
+
 const POLL_INTERVAL_MS = 30_000;
 
 export const TrendingSearches: React.FC = () => {
@@ -52,14 +52,14 @@ export const TrendingSearches: React.FC = () => {
     }
   }, []);
 
-  // Initial load + polling every 30 s
+
   useEffect(() => {
     fetchTrending();
     const id = setInterval(fetchTrending, POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [fetchTrending]);
 
-  // ── last-refreshed relative label ──
+
   const elapsed = Math.floor((Date.now() - lastFetch) / 1000);
   const refreshLabel = lastFetch === 0 ? '' :
     elapsed < 5  ? 'just now' :
@@ -69,7 +69,7 @@ export const TrendingSearches: React.FC = () => {
   return (
     <GlassCard className="flex-1 overflow-hidden">
 
-      {/* ── Header ── */}
+
       <div className="flex items-center gap-3 mb-5">
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/15 ring-1 ring-indigo-500/20 shrink-0">
           <TrendingUp className="w-4 h-4 text-indigo-400" />
@@ -82,21 +82,21 @@ export const TrendingSearches: React.FC = () => {
           </p>
         </div>
 
-        {/* Live badge */}
+
         <span className="ml-auto flex items-center gap-1.5 badge bg-indigo-500/10 text-indigo-400 ring-1 ring-indigo-500/20 text-[10px] shrink-0">
           <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse" />
           Live
         </span>
       </div>
 
-      {/* ── Loading skeletons ── */}
+
       {isLoading && (
         <ul className="space-y-0.5">
           {[...Array(5)].map((_, i) => <SkeletonRow key={i} />)}
         </ul>
       )}
 
-      {/* ── Error state ── */}
+
       {!isLoading && error && (
         <div className="flex flex-col items-center justify-center py-8 gap-3 text-center">
           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-rose-500/10 ring-1 ring-rose-500/20">
@@ -116,7 +116,7 @@ export const TrendingSearches: React.FC = () => {
         </div>
       )}
 
-      {/* ── Results list ── */}
+
       {!isLoading && !error && items.length === 0 && (
         <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
           <TrendingUp className="w-6 h-6 text-slate-700" />
@@ -140,7 +140,7 @@ export const TrendingSearches: React.FC = () => {
                 )}
                 style={{ animationDelay: `${i * 40}ms`, animationFillMode: 'both' }}
               >
-                {/* Rank badge */}
+
                 <span className={cn(
                   'flex items-center justify-center w-7 h-7 rounded-lg text-[11px] font-bold shrink-0 ring-1',
                   rankBadgeClass(rank)
@@ -148,7 +148,7 @@ export const TrendingSearches: React.FC = () => {
                   {rank}
                 </span>
 
-                {/* Term + score sub-line */}
+
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-slate-300 group-hover:text-slate-100 transition-colors font-medium truncate capitalize">
                     {item.query}
@@ -158,7 +158,7 @@ export const TrendingSearches: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Hot flame for top 3 */}
+
                 {rank <= 3 && (
                   <Flame className={cn(
                     'w-3.5 h-3.5 shrink-0 transition-colors',
@@ -166,7 +166,7 @@ export const TrendingSearches: React.FC = () => {
                   )} />
                 )}
 
-                {/* Volume (totalCount formatted) */}
+
                 <div className="text-right shrink-0">
                   <div className="text-xs text-slate-400 font-mono font-medium">
                     {formatCount(item.totalCount)}

@@ -99,14 +99,14 @@ export const SearchBox: React.FC = () => {
   return (
     <div className="relative w-full z-40" ref={containerRef}>
 
-      {/* ── Input wrapper ── */}
+
       <div
         className={cn(
           'glass-input relative flex items-center w-full rounded-2xl transition-all duration-200',
           isFocused ? 'focus-ring-sky' : 'hover:border-white/[0.10]'
         )}
       >
-        {/* Left icon – spinner when loading, search otherwise */}
+
         <div className="absolute left-5 pointer-events-none">
           {isLoading && query.length >= 3
             ? <Loader2 className="w-5 h-5 text-sky-400 animate-spin" />
@@ -141,7 +141,7 @@ export const SearchBox: React.FC = () => {
           aria-expanded={dropdownVisible}
         />
 
-        {/* Clear button */}
+
         {query && (
           <button
             onClick={handleClear}
@@ -157,7 +157,7 @@ export const SearchBox: React.FC = () => {
         )}
       </div>
 
-      {/* ── Keyboard shortcut hint (only when unfocused and empty) ── */}
+
       {!isFocused && !query && (
         <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
           <kbd className="hidden md:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.07] text-slate-600 text-[11px] font-mono">
@@ -166,7 +166,7 @@ export const SearchBox: React.FC = () => {
         </div>
       )}
 
-      {/* ── Dropdown ── */}
+
       <SuggestionDropdown
         suggestions={suggestions}
         isLoading={isLoading}
