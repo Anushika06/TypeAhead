@@ -486,6 +486,17 @@ The entire stack — Frontend, Backend, PostgreSQL, and Redis — can be started
 docker compose build
 ```
 
+### Docker Initialization
+
+On first startup PostgreSQL automatically loads ~128k records.
+This may take slightly longer than subsequent startups.
+After initialization the data is persisted inside Docker volumes.
+
+To completely reset the environment and trigger a fresh initialization:
+```bash
+docker compose down -v
+```
+
 ### Start All Services
 
 ```bash
@@ -543,7 +554,6 @@ docker compose down -v
 
 > **Note on Data Persistence:** PostgreSQL data survives `docker compose down` and is restored on `docker compose up` via the `postgres-data` named volume. Use `docker compose down -v` to perform a full reset including the database.
 
-> **Note on Dataset:** The database schema is created automatically on first startup via `init.sql`. You still need to load the AOL search dataset into the PostgreSQL container. Use `docker compose exec postgres psql -U postgres -d typeahead` to connect and import your CSV.
 
 ---
 
