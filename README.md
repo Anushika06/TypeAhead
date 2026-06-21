@@ -6,6 +6,20 @@ This project demonstrates distributed system patterns including in-memory cachin
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="screenshots/screenshot_1.png" width="800" alt="Screenshot 1"/>
+  <br/><br/>
+  <img src="screenshots/screenshot_2.png" width="800" alt="Screenshot 2"/>
+  <br/><br/>
+  <img src="screenshots/screenshot_3.png" width="800" alt="Screenshot 3"/>
+  <br/><br/>
+  <img src="screenshots/screenshot_4.png" width="800" alt="Screenshot 4"/>
+</p>
+
+---
+
 ## 1. Project Overview
 
 A **Typeahead System** (or autocomplete) predicts a user's search query as they type, significantly improving user experience by reducing keystrokes and guiding them toward popular or relevant content.
@@ -524,3 +538,51 @@ Potential production-scale enhancements:
 
 
 This project successfully demonstrates a highly scalable autocomplete architecture. By combining PostgreSQL as a reliable source of truth, Redis for in-memory reads, Redis Streams for write decoupling, batched aggregation for I/O safety, and a mathematical logarithmic approach to trend-aware ranking, the system is designed to handle immense scale gracefully.
+
+
+# Performance Report
+
+## Benchmark Environment
+* **CPU:** 12th Gen Intel(R) Core(TM) i5-12450H
+* **RAM:** 16 GB
+* **Java Version:** Unknown
+* **PostgreSQL Version:** 16+
+* **Redis Version:** 7+
+
+## Read Latency Results
+| Metric | Latency (ms) |
+|---|---|
+| Average Cache Miss | 29.74 ms |
+| Average Cache Hit | 8.88 ms |
+| **Improvement** | **3.3x faster** |
+
+## Cache Efficiency Results
+
+| Metric | Value |
+|---|---|
+| Total Cache Hits | 99 |
+| Total Cache Misses | 13 |
+| **Cache Hit Rate** | **88.4%** |
+
+## Write Reduction Results
+
+### Benchmark Methodology
+* 1000 search events were generated.
+* Events were published to Redis Streams.
+* The consumer aggregated events in memory.
+* Batched UPSERTs were written to PostgreSQL.
+
+| Metric | Value |
+|---|---|
+| Stream Events Published | 1000 |
+| Stream Events Consumed  | 1000 |
+| Batch Flush Count       | 2 |
+| Potential DB Writes     | 1000 |
+| Actual DB Writes        | 16 |
+| **Write Reduction**     | **98.40%** |
+
+## Observations
+* **Redis Cache Benefit:** The Cache-Aside pattern provides a 3.3x reduction in latency for repeated autocomplete prefix queries.
+* **Cache Aside Impact:** Once the Redis ZSET is populated on the first miss, the database is completely shielded from subsequent read traffic for that prefix.
+* **Batching Benefit:** The background Redis Stream consumer aggregated and deduplicated 1000 ingested search events before persistence. Instead of executing 1000 individual database writes, the system processed the workload using only **16 PostgreSQL UPSERT operations across 2 batch flushes**, resulting in a **98.4% reduction in database write I/O** while preserving accurate query counts and trend scores.
+* **Redis Streams Impact:** Decoupling the write path via Redis Streams allows the `POST /search` endpoint to return immediately, keeping ingestion latency near-zero regardless of database load.
