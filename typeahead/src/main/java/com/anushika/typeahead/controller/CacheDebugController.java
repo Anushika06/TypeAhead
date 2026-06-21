@@ -27,6 +27,14 @@ import java.util.Map;
  *   <li>{@code GET /cache/ring}             — visualise the consistent hashing ring</li>
  *   <li>{@code GET /metrics}               — full system metrics snapshot</li>
  * </ul>
+ *
+ * <h2>Routing consistency</h2>
+ * {@code GET /cache/debug} resolves the node via the same
+ * {@link ConsistentHashRing#getNode(String)} call used by
+ * {@link com.anushika.typeahead.cache.SuggestionCacheService} and
+ * {@link com.anushika.typeahead.cache.CacheRefreshService}.
+ * The {@code assignedNode} field therefore reflects the actual routing used
+ * during live cache operations — there is no special-case logic.
  */
 @CrossOrigin(origins = "http://localhost:5173")
 @RestController
@@ -36,16 +44,16 @@ public class CacheDebugController {
     /** Key namespace must match SuggestionCacheService.KEY_NAMESPACE */
     private static final String KEY_NAMESPACE = "prefix:";
 
+    private final ConsistentHashRing  hashRing;
     private final StringRedisTemplate redisTemplate;
-    private final MetricsService metricsService;
-    private final ConsistentHashRing hashRing;
+    private final MetricsService      metricsService;
 
-    public CacheDebugController(StringRedisTemplate redisTemplate,
-                                MetricsService metricsService,
-                                ConsistentHashRing hashRing) {
+    public CacheDebugController(ConsistentHashRing hashRing,
+                                StringRedisTemplate redisTemplate,
+                                MetricsService metricsService) {
+        this.hashRing      = hashRing;
         this.redisTemplate = redisTemplate;
         this.metricsService = metricsService;
-        this.hashRing = hashRing;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -56,12 +64,16 @@ public class CacheDebugController {
      * Inspects the Redis ZSET for a given prefix and shows which consistent-hash
      * ring node is responsible for storing it.
      *
+     * <p>Node resolution uses {@link ConsistentHashRing#getNode(String)} — the
+     * same call made by all live cache operations — ensuring the {@code assignedNode}
+     * in this response always matches the routing used in production.
+     *
      * <p>Response when the key exists:
      * <pre>
      * {
-     *   "prefix":       "goo",
-     *   "assignedNode": "redis-node-2",
-     *   "cacheHit":     true,
+     *   "prefix":          "goo",
+     *   "assignedNode":    "redis-node-2",
+     *   "cacheHit":        true,
      *   "suggestionCount": 10
      * }
      * </pre>
@@ -81,12 +93,12 @@ public class CacheDebugController {
     public ResponseEntity<Map<String, Object>> debugCache(
             @RequestParam("prefix") String prefix) {
 
-        String normalised  = prefix.trim().toLowerCase();
-        String key         = KEY_NAMESPACE + normalised;
-        String assignedNode = hashRing.getNode(normalised);
+        String normalised    = prefix.trim().toLowerCase();
+        String key           = KEY_NAMESPACE + normalised;
+        String assignedNode  = hashRing.getNode(normalised);
 
         // ZCARD returns the member count of the sorted set, or null/0 if absent
-        Long count = redisTemplate.opsForZSet().size(key);
+        Long count      = redisTemplate.opsForZSet().size(key);
         boolean cacheHit = count != null && count > 0;
 
         Map<String, Object> body = new LinkedHashMap<>();
@@ -129,7 +141,7 @@ public class CacheDebugController {
      */
     @GetMapping("/cache/ring")
     public ResponseEntity<Map<String, Object>> ringView() {
-        List<String> nodes           = hashRing.getPhysicalNodes();
+        List<String> nodes            = hashRing.getPhysicalNodes();
         Map<String, Double> ownership = hashRing.getOwnershipPercentages();
 
         // Build the per-node detail list

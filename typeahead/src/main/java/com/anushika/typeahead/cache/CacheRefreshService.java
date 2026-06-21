@@ -21,6 +21,14 @@ import java.util.Set;
  * post-flush <em>incremental update</em> of individual query scores across
  * multiple prefix keys — a distinct concern owned by the write pipeline.
  *
+ * <h2>Consistent Hashing — Node Routing</h2>
+ * For every prefix key that must be updated, {@link ConsistentHashRing#getNode(String)}
+ * is called to determine which logical node owns that prefix.  The assignment is
+ * logged before every write so routing is fully observable.
+ *
+ * <p>Each prefix in a single query update may resolve to a <em>different</em>
+ * logical node — this is correct and intentional.  The ring determines ownership.
+ *
  * <h2>Algorithm for each flushed query</h2>
  * <ol>
  *   <li>Fetch the current row from PostgreSQL (post-commit values).</li>
@@ -28,11 +36,8 @@ import java.util.Set;
  *       {@code score = log(total_count + 1) + log(trend_score + 1)}.</li>
  *   <li>Generate every prefix of length ≥ 3 up to the full query length.
  *       Example: {@code "google"} → {@code ["goo","goog","googl","google"]}.</li>
- *   <li>For each prefix, {@code ZADD prefix:<p> score query} — inserts the
- *       member if absent, or updates its score if already present.</li>
- *   <li>Trim the ZSET to the top {@value #TOP_K} members by score using
- *       {@code ZREMRANGEBYRANK prefix:<p> 0 -(TOP_K+1)} so lower-ranked
- *       suggestions are evicted automatically.</li>
+ *   <li>For each prefix: resolve the owning node, then
+ *       {@code ZADD prefix:<p> score query} and trim to top-{@value #TOP_K}.</li>
  * </ol>
  *
  * <h2>Consistency guarantee</h2>
@@ -56,11 +61,14 @@ public class CacheRefreshService {
     private static final int TOP_K = 10;
 
     private final SearchQueryRepository repository;
-    private final StringRedisTemplate redisTemplate;
+    private final ConsistentHashRing    ring;
+    private final StringRedisTemplate   redisTemplate;
 
     public CacheRefreshService(SearchQueryRepository repository,
+                               ConsistentHashRing ring,
                                StringRedisTemplate redisTemplate) {
-        this.repository = repository;
+        this.repository    = repository;
+        this.ring          = ring;
         this.redisTemplate = redisTemplate;
     }
 
@@ -113,17 +121,24 @@ public class CacheRefreshService {
      * Updates every prefix ZSET for a single query and returns the number
      * of prefix keys that were touched.
      *
+     * <p>Each prefix is independently routed through the consistent hash ring.
+     * The assigned node is logged before every write.
+     *
      * @param row fresh DB row for the query
      * @return number of prefix keys updated
      */
     private int updatePrefixKeys(SearchQuery row) {
-        String query = row.getQuery();
-        double score = computeScore(row.getTotalCount(), row.getTrendScore());
+        String query  = row.getQuery();
+        double score  = computeScore(row.getTotalCount(), row.getTrendScore());
         List<String> prefixes = generatePrefixes(query);
 
         ZSetOperations<String, String> zOps = redisTemplate.opsForZSet();
 
         for (String prefix : prefixes) {
+            // Route through the ring — each prefix may land on a different logical node
+            String node = ring.getNode(prefix);
+            log.info("CACHE NODE ASSIGNED  prefix={}  node={}", prefix, node);
+
             String key = KEY_NAMESPACE + prefix;
 
             // ZADD key score member — inserts or updates the score in O(log N)

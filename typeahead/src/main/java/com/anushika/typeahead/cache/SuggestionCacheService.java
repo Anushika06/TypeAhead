@@ -25,6 +25,16 @@ import java.util.Set;
  *   score = log(total_count + 1) + log(trend_score + 1)
  * </pre>
  *
+ * <h2>Consistent Hashing — Node Routing</h2>
+ * Every cache operation calls {@link ConsistentHashRing#getNode(String)} with the
+ * prefix to determine which logical cache node owns that key.  The assigned node
+ * is logged before every Redis operation so routing is fully observable.
+ *
+ * <p>All three logical nodes ({@code redis-node-1}, {@code redis-node-2},
+ * {@code redis-node-3}) are registered on the ring.  In development they share
+ * a single local Redis connection — the routing logic is real even though the
+ * physical connection is shared.
+ *
  * <h2>Why ZSET?</h2>
  * <ul>
  *   <li><b>ZADD</b> is idempotent — re-caching the same prefix simply
@@ -34,10 +44,6 @@ import java.util.Set;
  *   <li>Scores can be updated individually after a batch flush without
  *       rebuilding the entire key.</li>
  * </ul>
- *
- * <h2>Key naming convention</h2>
- * All keys use the {@code prefix:} namespace so they can be identified and
- * flushed independently of any other Redis data in the same instance.
  *
  * <h2>TTL</h2>
  * No TTL is set on cache entries.  Keys live until explicitly removed by
@@ -55,9 +61,12 @@ public class SuggestionCacheService {
     /** Maximum number of suggestions to store / retrieve per prefix. */
     private static final int TOP_K = 10;
 
+    private final ConsistentHashRing  ring;
     private final StringRedisTemplate redisTemplate;
 
-    public SuggestionCacheService(StringRedisTemplate redisTemplate) {
+    public SuggestionCacheService(ConsistentHashRing ring,
+                                  StringRedisTemplate redisTemplate) {
+        this.ring          = ring;
         this.redisTemplate = redisTemplate;
     }
 
@@ -67,6 +76,9 @@ public class SuggestionCacheService {
 
     /**
      * Writes a ranked list of suggestions for the given prefix into Redis.
+     *
+     * <p>The prefix is first routed through the consistent hash ring to determine
+     * the owning logical node, which is logged before the write.
      *
      * <p>Each {@link SuggestionResponse#query()} becomes a ZSET member and
      * {@link SuggestionResponse#score()} becomes its ZSET score.  The entire
@@ -84,6 +96,9 @@ public class SuggestionCacheService {
             return;
         }
 
+        String node = ring.getNode(prefix);
+        log.info("CACHE NODE ASSIGNED  prefix={}  node={}", prefix, node);
+
         String key = buildKey(prefix);
 
         try {
@@ -96,15 +111,20 @@ public class SuggestionCacheService {
                 zOps.add(key, suggestion.query(), suggestion.score());
             }
 
-            log.debug("Cached {} suggestions for prefix '{}' (no TTL)", suggestions.size(), prefix);
+            log.debug("[{}] cached {} suggestions for prefix '{}' (no TTL)",
+                    node, suggestions.size(), prefix);
         } catch (Exception ex) {
             // Cache writes must never break the read path — log and continue
-            log.warn("Failed to cache suggestions for prefix '{}': {}", prefix, ex.getMessage());
+            log.warn("[{}] failed to cache suggestions for prefix '{}': {}",
+                    node, prefix, ex.getMessage());
         }
     }
 
     /**
      * Retrieves the top-{@value #TOP_K} suggestions for the given prefix from Redis.
+     *
+     * <p>The prefix is first routed through the consistent hash ring to determine
+     * the owning logical node, which is logged before the read.
      *
      * <p>Uses {@code ZREVRANGEBYSCORE} semantics via
      * {@link ZSetOperations#reverseRangeWithScores} so members are returned
@@ -118,6 +138,9 @@ public class SuggestionCacheService {
             return Collections.emptyList();
         }
 
+        String node = ring.getNode(prefix);
+        log.info("CACHE NODE ASSIGNED  prefix={}  node={}", prefix, node);
+
         String key = buildKey(prefix);
 
         try {
@@ -126,7 +149,7 @@ public class SuggestionCacheService {
                     redisTemplate.opsForZSet().reverseRangeWithScores(key, 0, TOP_K - 1);
 
             if (tuples == null || tuples.isEmpty()) {
-                log.debug("Cache miss for prefix '{}'", prefix);
+                log.debug("[{}] cache miss for prefix '{}'", node, prefix);
                 return Collections.emptyList();
             }
 
@@ -135,18 +158,23 @@ public class SuggestionCacheService {
                     .map(t -> new SuggestionResponse(t.getValue(), t.getScore()))
                     .toList();
 
-            log.debug("Cache hit for prefix '{}': {} suggestions", prefix, results.size());
+            log.debug("[{}] cache hit for prefix '{}': {} suggestions",
+                    node, prefix, results.size());
             return results;
 
         } catch (Exception ex) {
             // Cache reads must never break the read path — return empty = miss
-            log.warn("Failed to read cache for prefix '{}': {}", prefix, ex.getMessage());
+            log.warn("[{}] failed to read cache for prefix '{}': {}",
+                    node, prefix, ex.getMessage());
             return Collections.emptyList();
         }
     }
 
     /**
      * Removes the ZSET key for the given prefix from Redis.
+     *
+     * <p>The prefix is first routed through the consistent hash ring to determine
+     * the owning logical node, which is logged before the delete.
      *
      * <p>Intended for use after a PostgreSQL batch flush to force a fresh
      * cache population on the next request.
@@ -158,13 +186,18 @@ public class SuggestionCacheService {
             return;
         }
 
+        String node = ring.getNode(prefix);
+        log.info("CACHE NODE ASSIGNED  prefix={}  node={}", prefix, node);
+
         String key = buildKey(prefix);
 
         try {
             Boolean deleted = redisTemplate.delete(key);
-            log.debug("Evicted cache key '{}': {}", key, Boolean.TRUE.equals(deleted) ? "deleted" : "not found");
+            log.debug("[{}] evicted cache key '{}': {}", node, key,
+                    Boolean.TRUE.equals(deleted) ? "deleted" : "not found");
         } catch (Exception ex) {
-            log.warn("Failed to evict cache for prefix '{}': {}", prefix, ex.getMessage());
+            log.warn("[{}] failed to evict cache for prefix '{}': {}",
+                    node, prefix, ex.getMessage());
         }
     }
 

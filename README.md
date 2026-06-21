@@ -38,6 +38,7 @@ The system successfully implements all core and advanced requirements:
 ## 3. Dataset
 
 The system is seeded with a sanitized subset of the **AOL Search Query Dataset**.
+Dataset Link: [AOL User Session Collection 500k](https://www.kaggle.com/datasets/dineshydv/aol-user-session-collection-500k)
 
 * **Rows loaded:** ~128,810 unique queries.
 * **Preprocessing Pipeline:**
@@ -206,7 +207,7 @@ Sorted Sets perfectly align with typeahead requirements: they maintain order nat
 
 ## 10. Consistent Hashing
 
-A demonstration of distributed caching is implemented via `ConsistentHashRing`.
+A distributed caching architecture is simulated via `ConsistentHashRing`. Every cache read and write operation is explicitly routed through the ring to assign a logical cache node, demonstrating scalable cache sharding logic.
 
 **Why Consistent Hashing?**
 In a multi-node Redis cluster, standard modulo hashing (`hash(key) % N`) fails catastrophically during scaling. If a node is added or removed, the denominator changes, causing nearly 100% of keys to map to wrong nodes, triggering a massive cache stampede against PostgreSQL.
