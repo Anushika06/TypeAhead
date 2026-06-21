@@ -52,6 +52,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SCHEDULER_DECAY_CRON: "0 0 2 * * *"
       CORS_ALLOWED_ORIGINS: http://localhost,http://frontend
     ports:
       - "8080:8080"
