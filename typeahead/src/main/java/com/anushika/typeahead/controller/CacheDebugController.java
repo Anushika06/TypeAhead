@@ -181,7 +181,7 @@ public class CacheDebugController {
      *   "dbWrites":                40,
      *   "streamEventsPublished":  500,
      *   "streamEventsConsumed":   500,
-     *   "batchFlushes":            12,
+     *   "batchFlushCount":         12,
      *   "avgFlushSize":           412
      * }
      * </pre>

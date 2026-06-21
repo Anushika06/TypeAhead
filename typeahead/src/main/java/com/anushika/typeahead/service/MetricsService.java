@@ -130,7 +130,7 @@ public class MetricsService {
         snapshot.put("dbWrites",              dbWrites.get());
         snapshot.put("streamEventsPublished", streamEventsPublished.get());
         snapshot.put("streamEventsConsumed",  streamEventsConsumed.get());
-        snapshot.put("batchFlushes",          flushes);
+        snapshot.put("batchFlushCount",       flushes);
         snapshot.put("avgFlushSize",          avgFlush);
         return snapshot;
     }

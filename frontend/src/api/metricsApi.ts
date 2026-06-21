@@ -8,7 +8,7 @@ export interface MetricsData {
   dbWrites:              number;
   streamEventsPublished: number;
   streamEventsConsumed:  number;
-  batchFlushes:          number;
+  batchFlushCount:       number;
   avgFlushSize:          number;
 }
 

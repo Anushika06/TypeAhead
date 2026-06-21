@@ -43,7 +43,7 @@ function buildMetricRows(d: MetricsData): MetricRow[] {
   return [
     {
       label:     'Cache Hit Rate',
-      value:     `${d.cacheHitRate.toFixed(1)}%`,
+      value:     `${(d.cacheHitRate ?? 0).toFixed(1)}%`,
       sub:       'requests served from Redis',
       icon:      <Zap className="w-4 h-4" />,
       accent:    'bg-amber-500/15 ring-amber-500/25',
@@ -51,7 +51,7 @@ function buildMetricRows(d: MetricsData): MetricRow[] {
     },
     {
       label:     'Cache Hits',
-      value:     fmt(d.cacheHits),
+      value:     fmt(d.cacheHits ?? 0),
       sub:       'total Redis hits this session',
       icon:      <Activity className="w-4 h-4" />,
       accent:    'bg-emerald-500/15 ring-emerald-500/25',
@@ -59,7 +59,7 @@ function buildMetricRows(d: MetricsData): MetricRow[] {
     },
     {
       label:     'Cache Misses',
-      value:     fmt(d.cacheMisses),
+      value:     fmt(d.cacheMisses ?? 0),
       sub:       'cache bypass → DB fallback',
       icon:      <ArrowDownRight className="w-4 h-4" />,
       accent:    'bg-rose-500/15 ring-rose-500/25',
@@ -67,7 +67,7 @@ function buildMetricRows(d: MetricsData): MetricRow[] {
     },
     {
       label:     'DB Reads',
-      value:     fmt(d.dbReads),
+      value:     fmt(d.dbReads ?? 0),
       sub:       'PostgreSQL SELECT executions',
       icon:      <DatabaseZap className="w-4 h-4" />,
       accent:    'bg-sky-500/15 ring-sky-500/25',
@@ -75,7 +75,7 @@ function buildMetricRows(d: MetricsData): MetricRow[] {
     },
     {
       label:     'DB Writes',
-      value:     fmt(d.dbWrites),
+      value:     fmt(d.dbWrites ?? 0),
       sub:       'UPSERT rows flushed to Postgres',
       icon:      <Pencil className="w-4 h-4" />,
       accent:    'bg-violet-500/15 ring-violet-500/25',
@@ -83,7 +83,7 @@ function buildMetricRows(d: MetricsData): MetricRow[] {
     },
     {
       label:     'Stream Events Published',
-      value:     fmt(d.streamEventsPublished),
+      value:     fmt(d.streamEventsPublished ?? 0),
       sub:       'search events → Redis Stream',
       icon:      <Send className="w-4 h-4" />,
       accent:    'bg-indigo-500/15 ring-indigo-500/25',
@@ -91,7 +91,7 @@ function buildMetricRows(d: MetricsData): MetricRow[] {
     },
     {
       label:     'Stream Events Consumed',
-      value:     fmt(d.streamEventsConsumed),
+      value:     fmt(d.streamEventsConsumed ?? 0),
       sub:       'events read by the aggregator',
       icon:      <Radio className="w-4 h-4" />,
       accent:    'bg-cyan-500/15 ring-cyan-500/25',
@@ -99,8 +99,8 @@ function buildMetricRows(d: MetricsData): MetricRow[] {
     },
     {
       label:     'Batch Flushes',
-      value:     fmt(d.batchFlushes),
-      sub:       `avg size · ${fmt(d.avgFlushSize)} events/flush`,
+      value:     fmt(d.batchFlushCount ?? 0),
+      sub:       `avg size · ${fmt(d.avgFlushSize ?? 0)} events/flush`,
       icon:      <Layers className="w-4 h-4" />,
       accent:    'bg-orange-500/15 ring-orange-500/25',
       iconColor: 'text-orange-400',
