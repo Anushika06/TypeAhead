@@ -1,5 +1,6 @@
 package com.anushika.typeahead.service;
 
+import com.anushika.typeahead.cache.CacheConstants;
 import com.anushika.typeahead.cache.CacheMetrics;
 import com.anushika.typeahead.cache.SuggestionCacheService;
 import com.anushika.typeahead.dto.SuggestionResponse;
@@ -16,22 +17,23 @@ public class SuggestionService {
 
     private static final Logger log = LoggerFactory.getLogger(SuggestionService.class);
 
-    private static final int MIN_PREFIX_LENGTH = 3;
-    private static final int MAX_SUGGESTIONS   = 10;
 
     private final SearchQueryRepository searchQueryRepository;
     private final SuggestionCacheService cacheService;
     private final CacheMetrics cacheMetrics;
     private final MetricsService metricsService;
+    private final RankingService rankingService;
 
     public SuggestionService(SearchQueryRepository searchQueryRepository,
                              SuggestionCacheService cacheService,
                              CacheMetrics cacheMetrics,
-                             MetricsService metricsService) {
+                             MetricsService metricsService,
+                             RankingService rankingService) {
         this.searchQueryRepository = searchQueryRepository;
         this.cacheService = cacheService;
         this.cacheMetrics = cacheMetrics;
         this.metricsService = metricsService;
+        this.rankingService = rankingService;
     }
 
     /**
@@ -52,7 +54,7 @@ public class SuggestionService {
      * came from cache or database.
      */
     public List<SuggestionResponse> getSuggestions(String prefix) {
-        if (prefix == null || prefix.trim().length() < MIN_PREFIX_LENGTH) {
+        if (prefix == null || prefix.trim().length() < CacheConstants.MIN_PREFIX_LENGTH) {
             return List.of();
         }
 
@@ -77,10 +79,10 @@ public class SuggestionService {
                 .stream()
                 .map(sq -> new SuggestionResponse(
                         sq.getQuery(),
-                        computeScore(sq.getTotalCount(), sq.getTrendScore())
+                        rankingService.computeScore(sq.getTotalCount(), sq.getTrendScore())
                 ))
                 .sorted(Comparator.comparingDouble(SuggestionResponse::score).reversed())
-                .limit(MAX_SUGGESTIONS)
+                .limit(CacheConstants.TOP_K)
                 .toList();
 
         // ── 3. Populate cache ─────────────────────────────────────────────────
@@ -91,14 +93,4 @@ public class SuggestionService {
         return results;
     }
 
-    /**
-     * Ranking formula. Logarithmic scaling prevents high historical counts
-     * from permanently dominating trending queries.
-     *
-     * ranking_score is intentionally not persisted — computed here at read time.
-     */
-    private double computeScore(long totalCount, double trendScore) {
-        double score = Math.log(totalCount + 1) + Math.log(trendScore + 1);
-        return Math.round(score * 100.0) / 100.0;
-    }
 }

@@ -8,6 +8,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
+import com.anushika.typeahead.service.RankingService;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -51,25 +53,19 @@ public class CacheRefreshService {
 
     private static final Logger log = LoggerFactory.getLogger(CacheRefreshService.class);
 
-    /** Matches the namespace in {@link SuggestionCacheService}. */
-    private static final String KEY_NAMESPACE = "prefix:";
-
-    /** Minimum prefix length to cache — mirrors MIN_PREFIX_LENGTH in SuggestionService. */
-    private static final int MIN_PREFIX_LEN = 3;
-
-    /** Maximum number of members to keep per prefix ZSET. */
-    private static final int TOP_K = 10;
-
     private final SearchQueryRepository repository;
     private final ConsistentHashRing    ring;
     private final StringRedisTemplate   redisTemplate;
+    private final RankingService        rankingService;
 
     public CacheRefreshService(SearchQueryRepository repository,
                                ConsistentHashRing ring,
-                               StringRedisTemplate redisTemplate) {
+                               StringRedisTemplate redisTemplate,
+                               RankingService rankingService) {
         this.repository    = repository;
         this.ring          = ring;
         this.redisTemplate = redisTemplate;
+        this.rankingService = rankingService;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -129,7 +125,7 @@ public class CacheRefreshService {
      */
     private int updatePrefixKeys(SearchQuery row) {
         String query  = row.getQuery();
-        double score  = computeScore(row.getTotalCount(), row.getTrendScore());
+        double score  = rankingService.computeScore(row.getTotalCount(), row.getTrendScore());
         List<String> prefixes = generatePrefixes(query);
 
         ZSetOperations<String, String> zOps = redisTemplate.opsForZSet();
@@ -139,7 +135,7 @@ public class CacheRefreshService {
             String node = ring.getNode(prefix);
             log.info("CACHE NODE ASSIGNED  prefix={}  node={}", prefix, node);
 
-            String key = KEY_NAMESPACE + prefix;
+            String key = CacheConstants.PREFIX_NAMESPACE + prefix;
 
             // ZADD key score member — inserts or updates the score in O(log N)
             zOps.add(key, query, score);
@@ -147,31 +143,14 @@ public class CacheRefreshService {
             // Trim: remove members with the lowest scores beyond TOP_K.
             // ZREMRANGEBYRANK key 0 -(TOP_K+1) removes ranks 0 … (size-TOP_K-1),
             // keeping exactly the TOP_K highest-scored members.
-            zOps.removeRange(key, 0, -(TOP_K + 1));
+            zOps.removeRange(key, 0, -(CacheConstants.TOP_K + 1));
         }
 
         log.debug("CacheRefresh: query='{}' score={} prefixes={}", query, score, prefixes);
         return prefixes.size();
     }
 
-    /**
-     * Recomputes the ranking score from fresh DB values.
-     *
-     * <p>Mirrors the formula in {@code SuggestionService.computeScore()} so
-     * cached scores are always consistent with what the read path would compute.
-     *
-     * <pre>
-     * score = log(total_count + 1) + log(trend_score + 1)
-     * </pre>
-     *
-     * @param totalCount current total_count from PostgreSQL
-     * @param trendScore current trend_score from PostgreSQL
-     * @return rounded score (2 decimal places)
-     */
-    private double computeScore(long totalCount, double trendScore) {
-        double score = Math.log(totalCount + 1) + Math.log(trendScore + 1);
-        return Math.round(score * 100.0) / 100.0;
-    }
+
 
     /**
      * Generates all prefixes of {@code query} with length in
@@ -188,7 +167,7 @@ public class CacheRefreshService {
      */
     private List<String> generatePrefixes(String query) {
         List<String> prefixes = new ArrayList<>();
-        for (int len = MIN_PREFIX_LEN; len <= query.length(); len++) {
+        for (int len = CacheConstants.MIN_PREFIX_LENGTH; len <= query.length(); len++) {
             prefixes.add(query.substring(0, len));
         }
         return prefixes;

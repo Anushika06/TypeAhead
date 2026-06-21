@@ -55,12 +55,6 @@ public class SuggestionCacheService {
 
     private static final Logger log = LoggerFactory.getLogger(SuggestionCacheService.class);
 
-    /** Redis key namespace for all prefix caches. */
-    private static final String KEY_NAMESPACE = "prefix:";
-
-    /** Maximum number of suggestions to store / retrieve per prefix. */
-    private static final int TOP_K = 10;
-
     private final ConsistentHashRing  ring;
     private final StringRedisTemplate redisTemplate;
 
@@ -146,7 +140,7 @@ public class SuggestionCacheService {
         try {
             // ZREVRANGE key 0 (TOP_K - 1) WITHSCORES — highest score first
             Set<ZSetOperations.TypedTuple<String>> tuples =
-                    redisTemplate.opsForZSet().reverseRangeWithScores(key, 0, TOP_K - 1);
+                    redisTemplate.opsForZSet().reverseRangeWithScores(key, 0, CacheConstants.TOP_K - 1);
 
             if (tuples == null || tuples.isEmpty()) {
                 log.debug("[{}] cache miss for prefix '{}'", node, prefix);
@@ -215,6 +209,6 @@ public class SuggestionCacheService {
      * @return Redis key, e.g. {@code "prefix:goo"}
      */
     private String buildKey(String prefix) {
-        return KEY_NAMESPACE + prefix.toLowerCase();
+        return CacheConstants.PREFIX_NAMESPACE + prefix.toLowerCase();
     }
 }

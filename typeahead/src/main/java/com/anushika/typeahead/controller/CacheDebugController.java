@@ -1,5 +1,6 @@
 package com.anushika.typeahead.controller;
 
+import com.anushika.typeahead.cache.CacheConstants;
 import com.anushika.typeahead.cache.ConsistentHashRing;
 import com.anushika.typeahead.service.MetricsService;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -41,8 +42,6 @@ import java.util.Map;
 @RequestMapping
 public class CacheDebugController {
 
-    /** Key namespace must match SuggestionCacheService.KEY_NAMESPACE */
-    private static final String KEY_NAMESPACE = "prefix:";
 
     private final ConsistentHashRing  hashRing;
     private final StringRedisTemplate redisTemplate;
@@ -94,7 +93,7 @@ public class CacheDebugController {
             @RequestParam("prefix") String prefix) {
 
         String normalised    = prefix.trim().toLowerCase();
-        String key           = KEY_NAMESPACE + normalised;
+        String key           = CacheConstants.PREFIX_NAMESPACE + normalised;
         String assignedNode  = hashRing.getNode(normalised);
 
         // ZCARD returns the member count of the sorted set, or null/0 if absent
