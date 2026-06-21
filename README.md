@@ -18,6 +18,9 @@ This project demonstrates distributed system patterns including in-memory cachin
   <img src="screenshots/screenshot_4.png" width="800" alt="Screenshot 4"/>
 </p>
 
+## Demo Video
+[Demo Link](https://youtu.be/bpgiqNp9gMA?si=eRfgOzETY-qKLj8I)
+
 ---
 
 ## 1. Project Overview
