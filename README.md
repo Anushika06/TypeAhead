@@ -1,6 +1,6 @@
 # Search Typeahead System
 
-A highly scalable, production-ready Search Typeahead (Autocomplete) Engine engineered for extremely low latency and high throughput. 
+A highly scalable, production-inspired Search Typeahead (Autocomplete) Engine engineered for extremely low latency and high throughput. 
 
 This project demonstrates distributed system patterns including in-memory caching, stream processing, batch aggregation, consistent hashing, and eventual consistency to serve real-time search suggestions.
 
@@ -11,10 +11,21 @@ This project demonstrates distributed system patterns including in-memory cachin
 A **Typeahead System** (or autocomplete) predicts a user's search query as they type, significantly improving user experience by reducing keystrokes and guiding them toward popular or relevant content.
 
 **The Problem:**
-Autocomplete APIs face extreme read-heavy workloads. A single user typing "google" triggers 6 separate requests (`g`, `go`, `goo`, `goog`, `googl`, `google`). Querying a relational database for prefix matches on millions of records for every keystroke would quickly exhaust connection pools and crush database performance.
+Autocomplete APIs face extreme read-heavy workloads. A user typing "google" may generate multiple autocomplete requests (goo, goog, googl, google) after the minimum prefix threshold is reached.
+
+The frontend enforces:
+
+- Minimum prefix length = 3
+- 300ms debounce
+
+This significantly reduces unnecessary network traffic and backend load.
+
+Querying a relational database for prefix matches on millions of records for every keystroke would quickly exhaust connection pools and crush database performance.
 
 **Why Low Latency Matters:**
-To feel instantaneous, autocomplete suggestions must render within 100 milliseconds. This requires serving reads entirely from memory, bypassing the database on the critical path.
+To feel instantaneous, autocomplete suggestions must render within 100 milliseconds. The majority of autocomplete requests are served directly from Redis, significantly reducing database load while preserving PostgreSQL as the source of truth.
+
+Cache misses fall back to PostgreSQL and subsequently populate the cache.
 
 ---
 
@@ -205,9 +216,51 @@ Sorted Sets perfectly align with typeahead requirements: they maintain order nat
 
 ---
 
+### Cache Population Strategy
+
+The system uses a Cache-Aside pattern.
+
+PostgreSQL stores the complete dataset (~128k queries).
+
+Redis does NOT precompute and store every possible prefix for every query.
+
+Instead:
+
+- Prefixes are created lazily on demand after a cache miss.
+- Prefixes may also be updated during cache refresh after batch flushes.
+- Each prefix key stores only the top 10 ranked suggestions.
+
+Example:
+
+```text
+prefix:goo
+```
+
+Stores:
+
+```text
+google
+googlecom
+google maps
+...
+(top 10 only)
+```
+
+This keeps Redis memory usage bounded while allowing autocomplete requests to be served entirely from memory after cache warm-up.
+
 ## 10. Consistent Hashing
 
 A distributed caching architecture is simulated via `ConsistentHashRing`. Every cache read and write operation is explicitly routed through the ring to assign a logical cache node, demonstrating scalable cache sharding logic.
+
+### Note
+
+For assignment purposes, cache distribution is simulated using logical cache nodes.
+
+All logical nodes currently share a single Redis instance.
+
+The routing logic is implemented through Consistent Hashing and can be extended to multiple physical Redis nodes without changing application-level cache routing.
+
+This demonstrates the scalability pattern while keeping local development simple.
 
 **Why Consistent Hashing?**
 In a multi-node Redis cluster, standard modulo hashing (`hash(key) % N`) fails catastrophically during scaling. If a node is added or removed, the denominator changes, causing nearly 100% of keys to map to wrong nodes, triggering a massive cache stampede against PostgreSQL.
@@ -296,7 +349,7 @@ The frontend is a modern React/Vite application utilizing a premium "glassmorphi
 
 ---
 
-## 15. Running the Project
+## 19. Running the Project
 
 ### Prerequisites
 * Java 21+
@@ -316,9 +369,11 @@ Alternatively, install Redis locally via Homebrew (`brew install redis`) or apt.
 Ensure PostgreSQL is running on port `5432`. Create the database and user configured in `application.yaml`:
 ```sql
 CREATE DATABASE typeahead;
-CREATE USER postgres WITH PASSWORD 'mn@h_2006';
+CREATE USER postgres WITH PASSWORD 'your_password';
 GRANT ALL PRIVILEGES ON DATABASE typeahead TO postgres;
 ```
+
+> Update `application.yaml` with your local PostgreSQL credentials.
 
 ### 3. Start the Backend
 Navigate to the `typeahead` directory:
@@ -339,6 +394,125 @@ Visit `http://localhost:5173` in your browser.
 
 ---
 
-## 16. Conclusion
+## 15. Database Schema
+
+```sql
+CREATE TABLE search_queries (
+    query TEXT PRIMARY KEY,
+    total_count BIGINT NOT NULL,
+    trend_score DOUBLE PRECISION NOT NULL,
+    last_decay_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+```
+
+Indexes:
+
+```sql
+CREATE INDEX idx_query_lower_prefix
+ON search_queries (LOWER(query) text_pattern_ops);
+```
+
+---
+
+## 16. Performance Results
+
+### PostgreSQL Prefix Search Optimization
+
+Initial Query Plan:
+
+- Sequential Scan
+- Execution Time ≈ 71 ms
+
+Optimization:
+
+```sql
+CREATE INDEX idx_query_lower_prefix
+ON search_queries (LOWER(query) text_pattern_ops);
+```
+
+Optimized Query Plan:
+
+- Bitmap Index Scan
+- Execution Time ≈ 1.8 ms
+
+Observed Improvement:
+
+≈ 38× faster
+
+---
+
+### Cache Performance
+
+Local environment measurements:
+
+| Scenario | Latency |
+|-----------|----------|
+| Redis Cache Hit | ~10 ms |
+| Redis Cache Miss | ~34 ms |
+
+Observed Improvement:
+
+≈ 3× faster for repeated requests.
+
+Note:
+
+These measurements were recorded locally and should be interpreted as relative improvements rather than absolute benchmarks.
+
+---
+
+### Aggregation Efficiency
+
+100 identical search submissions
+
+↓
+
+1 aggregated UPSERT
+
+↓
+
+≈99% reduction in database writes
+
+---
+
+## 17. Why Not Trie?
+
+Trie is a popular autocomplete data structure and is excellent when all data is stored entirely in memory.
+
+This system additionally requires:
+
+- Persistent storage
+- Ranking
+- Trending calculations
+- Cache refreshes
+- Batched updates
+- Horizontal scalability patterns
+
+Redis Sorted Sets naturally maintain ranking order while PostgreSQL provides persistence.
+
+At the current dataset size (~128k queries), Redis Sorted Sets provide a simpler implementation with excellent performance and significantly lower operational complexity than maintaining a distributed Trie structure.
+
+---
+
+## 18. Future Improvements
+
+Potential production-scale enhancements:
+
+- Redis Consumer Groups (`XREADGROUP`)
+- Physical Redis Sharding
+- Distributed Aggregation Workers
+- Rate Limiting
+- OpenTelemetry Tracing
+- Prometheus + Grafana Monitoring
+- Multi-region Deployment
+- User-specific Personalization
+- Authentication & Analytics
+- Advanced Search Ranking Models
+
+---
+
+## 20. Conclusion
+
+
 
 This project successfully demonstrates a highly scalable autocomplete architecture. By combining PostgreSQL as a reliable source of truth, Redis for in-memory reads, Redis Streams for write decoupling, batched aggregation for I/O safety, and a mathematical logarithmic approach to trend-aware ranking, the system is designed to handle immense scale gracefully.
