@@ -72,6 +72,26 @@ Dataset Link: [AOL User Session Collection 500k](https://www.kaggle.com/datasets
   3. **Aggregation:** Historical search volumes calculated to seed the `total_count`.
   4. **Trend Score Generation:** Initial `trend_score` seeded to mirror historical volumes before decay cycles begin.
 
+### Loading the Dataset
+
+1. Download the AOL Search Query Dataset.
+2. Run the preprocessing pipeline.
+3. Normalize all queries to lowercase.
+4. Remove duplicates.
+5. Generate initial `total_count` and `trend_score`.
+6. Export the processed dataset as CSV.
+7. Import into PostgreSQL.
+
+Example:
+
+```sql
+COPY search_queries(query,total_count,trend_score)
+FROM '/path/to/processed_dataset.csv'
+DELIMITER ','
+CSV HEADER;
+```
+
+
 ---
 
 ## 4. System Architecture
@@ -173,6 +193,23 @@ Every search submitted by a user triggers `POST /search`.
 
 **Why Batching?**
 If 1,000 users search for "google" within 5 seconds, direct DB writes would trigger 1,000 separate `UPDATE` statements, exhausting disk I/O. By aggregating in memory, we execute exactly **1 write** mapping "google" to `+1000`.
+
+### Stream Consumer Recovery
+
+To prevent historical Redis Stream events from being replayed after application restarts, the consumer persists the last successfully processed stream offset in Redis.
+
+On startup:
+
+```text
+Consumer
+↓
+Load last processed offset
+↓
+Resume from saved position
+```
+
+This prevents count inflation caused by replaying the entire stream history.
+
 
 ---
 
@@ -281,6 +318,23 @@ In a multi-node Redis cluster, standard modulo hashing (`hash(key) % N`) fails c
 
 **The Solution:**
 Consistent hashing maps both Cache Nodes (e.g., `redis-node-1`, `redis-node-2`) and Keys onto a 64-bit circular ring. A key simply walks clockwise to find its assigned node. 
+
+```text
+                 Hash Ring
+
+redis-node-1
+      |
+      |
+      |
+redis-node-3 ------- redis-node-2
+
+goo  → redis-node-2
+ama  → redis-node-1
+iph  → redis-node-3
+```
+
+> Cache keys are mapped onto the hash ring and routed clockwise to the nearest logical cache node. This minimizes key movement during scaling and prevents large-scale cache invalidation.
+
 * **Minimal Key Movement:** If a node is removed, only the keys assigned to that specific node are reassigned. All other keys remain intact.
 * **Virtual Nodes:** We map each physical node to 150 "virtual" positions on the ring. This guarantees an even distribution of data, preventing hot-spots.
 
@@ -371,7 +425,7 @@ The frontend is a modern React/Vite application utilizing a premium "glassmorphi
 
 ---
 
-## 19. Running the Project
+## 15. Running the Project
 
 ### Prerequisites
 * Java 21+
@@ -416,7 +470,7 @@ Visit `http://localhost:5173` in your browser.
 
 ---
 
-## 15. Database Schema
+## 16. Database Schema
 
 ```sql
 CREATE TABLE search_queries (
@@ -437,115 +491,12 @@ ON search_queries (LOWER(query) text_pattern_ops);
 
 ---
 
-## 16. Performance Results
-
-### PostgreSQL Prefix Search Optimization
-
-Initial Query Plan:
-
-- Sequential Scan
-- Execution Time ≈ 71 ms
-
-Optimization:
-
-```sql
-CREATE INDEX idx_query_lower_prefix
-ON search_queries (LOWER(query) text_pattern_ops);
-```
-
-Optimized Query Plan:
-
-- Bitmap Index Scan
-- Execution Time ≈ 1.8 ms
-
-Observed Improvement:
-
-≈ 38× faster
-
----
-
-### Cache Performance
-
-Local environment measurements:
-
-| Scenario | Latency |
-|-----------|----------|
-| Redis Cache Hit | ~10 ms |
-| Redis Cache Miss | ~34 ms |
-
-Observed Improvement:
-
-≈ 3× faster for repeated requests.
-
-Note:
-
-These measurements were recorded locally and should be interpreted as relative improvements rather than absolute benchmarks.
-
----
-
-### Aggregation Efficiency
-
-100 identical search submissions
-
-↓
-
-1 aggregated UPSERT
-
-↓
-
-≈99% reduction in database writes
-
----
-
-## 17. Why Not Trie?
-
-Trie is a popular autocomplete data structure and is excellent when all data is stored entirely in memory.
-
-This system additionally requires:
-
-- Persistent storage
-- Ranking
-- Trending calculations
-- Cache refreshes
-- Batched updates
-- Horizontal scalability patterns
-
-Redis Sorted Sets naturally maintain ranking order while PostgreSQL provides persistence.
-
-At the current dataset size (~128k queries), Redis Sorted Sets provide a simpler implementation with excellent performance and significantly lower operational complexity than maintaining a distributed Trie structure.
-
----
-
-## 18. Future Improvements
-
-Potential production-scale enhancements:
-
-- Redis Consumer Groups (`XREADGROUP`)
-- Physical Redis Sharding
-- Distributed Aggregation Workers
-- Rate Limiting
-- OpenTelemetry Tracing
-- Prometheus + Grafana Monitoring
-- Multi-region Deployment
-- User-specific Personalization
-- Authentication & Analytics
-- Advanced Search Ranking Models
-
----
-
-## 20. Conclusion
-
-
-
-This project successfully demonstrates a highly scalable autocomplete architecture. By combining PostgreSQL as a reliable source of truth, Redis for in-memory reads, Redis Streams for write decoupling, batched aggregation for I/O safety, and a mathematical logarithmic approach to trend-aware ranking, the system is designed to handle immense scale gracefully.
-
-
-# Performance Report
+## 17. Performance Report
 
 ## Benchmark Environment
 * **CPU:** 12th Gen Intel(R) Core(TM) i5-12450H
 * **RAM:** 16 GB
-* **Java Version:** Unknown
+* **Java Version:** 21.0.10
 * **PostgreSQL Version:** 16+
 * **Redis Version:** 7+
 
@@ -557,6 +508,15 @@ This project successfully demonstrates a highly scalable autocomplete architectu
 | **Improvement** | **3.3x faster** |
 
 ## Cache Efficiency Results
+
+### Benchmark Methodology
+
+* Redis cache was cleared before testing.
+* 10 distinct prefixes were selected.
+* Each prefix was queried repeatedly.
+* First request generated a cache miss.
+* Subsequent requests were served from Redis.
+* Metrics were captured from the live system dashboard.
 
 | Metric | Value |
 |---|---|
@@ -586,3 +546,50 @@ This project successfully demonstrates a highly scalable autocomplete architectu
 * **Cache Aside Impact:** Once the Redis ZSET is populated on the first miss, the database is completely shielded from subsequent read traffic for that prefix.
 * **Batching Benefit:** The background Redis Stream consumer aggregated and deduplicated 1000 ingested search events before persistence. Instead of executing 1000 individual database writes, the system processed the workload using only **16 PostgreSQL UPSERT operations across 2 batch flushes**, resulting in a **98.4% reduction in database write I/O** while preserving accurate query counts and trend scores.
 * **Redis Streams Impact:** Decoupling the write path via Redis Streams allows the `POST /search` endpoint to return immediately, keeping ingestion latency near-zero regardless of database load.
+
+
+---
+
+## 18. Why Not Trie?
+
+Trie is a popular autocomplete data structure and is excellent when all data is stored entirely in memory.
+
+This system additionally requires:
+
+- Persistent storage
+- Ranking
+- Trending calculations
+- Cache refreshes
+- Batched updates
+- Horizontal scalability patterns
+
+Redis Sorted Sets naturally maintain ranking order while PostgreSQL provides persistence.
+
+At the current dataset size (~128k queries), Redis Sorted Sets provide a simpler implementation with excellent performance and significantly lower operational complexity than maintaining a distributed Trie structure.
+
+---
+
+## 19. Future Improvements
+
+Potential production-scale enhancements:
+
+- Redis Consumer Groups (`XREADGROUP`)
+- Physical Redis Sharding
+- Distributed Aggregation Workers
+- Rate Limiting
+- OpenTelemetry Tracing
+- Prometheus + Grafana Monitoring
+- Multi-region Deployment
+- User-specific Personalization
+- Authentication & Analytics
+- Advanced Search Ranking Models
+
+---
+
+## 20. Conclusion
+
+
+
+This project successfully demonstrates a highly scalable autocomplete architecture. By combining PostgreSQL as a reliable source of truth, Redis for in-memory reads, Redis Streams for write decoupling, batched aggregation for I/O safety, and a mathematical logarithmic approach to trend-aware ranking, the system is designed to handle immense scale gracefully.
+
+---
