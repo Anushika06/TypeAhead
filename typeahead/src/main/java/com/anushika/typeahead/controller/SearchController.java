@@ -9,6 +9,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import java.util.Map;
 
 /**
@@ -34,6 +38,7 @@ import java.util.Map;
  * { "message": "Searched" }
  * </pre>
  */
+@Tag(name = "Search Events", description = "Asynchronous search submission endpoints")
 @CrossOrigin(origins = "http://localhost:5173")
 @RestController
 public class SearchController {
@@ -53,6 +58,13 @@ public class SearchController {
      * @param request validated request body containing the raw query string
      * @return {@code 200 OK} with {@code {"message":"Searched"}}
      */
+    @Operation(
+            summary = "Record a search event",
+            description = "Publishes a search event to Redis Streams.\n\nEvents are processed asynchronously through\naggregation and batch persistence.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Successful operation")
+            }
+    )
     @PostMapping("/search")
     public ResponseEntity<Map<String, String>> search(
             @Valid @RequestBody SearchRequest request) {

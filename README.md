@@ -290,6 +290,14 @@ Atomic, lock-free counters (`AtomicLong`) track system performance in real-time,
 
 ## 12. API Documentation
 
+Swagger UI is available at:
+
+```text
+http://localhost:8080/swagger-ui/index.html
+```
+
+The API documentation is automatically generated using OpenAPI 3 and SpringDoc.
+
 ### Autocomplete API
 **`GET /suggest?q=<prefix>`**
 Returns up to 10 suggestions.

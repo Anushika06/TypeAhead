@@ -1,5 +1,7 @@
 package com.anushika.typeahead.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Response DTO for a single suggestion entry.
  *
@@ -9,4 +11,8 @@ package com.anushika.typeahead.dto;
  * It is intentionally NOT stored in PostgreSQL to avoid consistency
  * issues across decay cycles.
  */
-public record SuggestionResponse(String query, Double score) {}
+@Schema(description = "Response DTO for a single suggestion entry")
+public record SuggestionResponse(
+        @Schema(description = "The autocomplete suggestion", example = "google") String query,
+        @Schema(description = "Calculated ranking score", example = "19.58") Double score
+) {}

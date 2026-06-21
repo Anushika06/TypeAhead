@@ -11,6 +11,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -88,8 +93,17 @@ public class CacheDebugController {
      *
      * @param prefix the search prefix to inspect (case-insensitive)
      */
+    @Tag(name = "Cache Debug", description = "Endpoints for inspecting cache and hashing ring")
+    @Operation(
+            summary = "Inspect cache routing",
+            description = "Debug endpoints demonstrating logical cache node\nassignment using consistent hashing.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Successful operation")
+            }
+    )
     @GetMapping("/cache/debug")
     public ResponseEntity<Map<String, Object>> debugCache(
+            @Parameter(description = "Prefix to inspect")
             @RequestParam("prefix") String prefix) {
 
         String normalised    = prefix.trim().toLowerCase();
@@ -138,6 +152,14 @@ public class CacheDebugController {
      * }
      * </pre>
      */
+    @Tag(name = "Cache Debug")
+    @Operation(
+            summary = "Inspect consistent hash ring",
+            description = "Debug endpoints demonstrating logical cache node\nassignment using consistent hashing.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Successful operation")
+            }
+    )
     @GetMapping("/cache/ring")
     public ResponseEntity<Map<String, Object>> ringView() {
         List<String> nodes            = hashRing.getPhysicalNodes();
@@ -186,6 +208,14 @@ public class CacheDebugController {
      * }
      * </pre>
      */
+    @Tag(name = "Metrics", description = "System metrics endpoints")
+    @Operation(
+            summary = "Get system metrics",
+            description = "Returns cache, stream, database,\nand batch-processing statistics.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Successful operation")
+            }
+    )
     @GetMapping("/metrics")
     public ResponseEntity<Map<String, Object>> metrics() {
         return ResponseEntity.ok(metricsService.getSnapshot());

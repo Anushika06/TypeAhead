@@ -7,6 +7,10 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import java.util.List;
 
 /**
@@ -30,6 +34,7 @@ import java.util.List;
  * <p>No business logic lives here — all ranking is delegated to
  * {@link TrendingService}.
  */
+@Tag(name = "Trending", description = "Trending search query endpoints")
 @CrossOrigin(origins = "http://localhost:5173")
 @RestController
 public class TrendingController {
@@ -45,6 +50,13 @@ public class TrendingController {
      *
      * @return ranked list of {@link TrendingResponse} DTOs
      */
+    @Operation(
+            summary = "Get top trending searches",
+            description = "Returns highest ranked searches based on:\n\nlog(total_count + 1)\n+\nlog(trend_score + 1)",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Successful operation")
+            }
+    )
     @GetMapping("/trending")
     public ResponseEntity<List<TrendingResponse>> trending() {
         return ResponseEntity.ok(trendingService.getTopTrending());

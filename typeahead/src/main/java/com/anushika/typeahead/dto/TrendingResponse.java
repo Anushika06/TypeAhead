@@ -1,5 +1,7 @@
 package com.anushika.typeahead.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Response DTO for a single trending query entry.
  *
@@ -15,9 +17,10 @@ package com.anushika.typeahead.dto;
  *   <li>{@code trendScore} — decaying recency signal (decays 10 % nightly)</li>
  * </ul>
  */
+@Schema(description = "Response DTO for a single trending query entry")
 public record TrendingResponse(
-        String query,
-        Double score,
-        Long   totalCount,
-        Double trendScore
+        @Schema(description = "Normalised search term", example = "google") String query,
+        @Schema(description = "Calculated ranking score", example = "19.62") Double score,
+        @Schema(description = "Cumulative historical search volume", example = "32532") Long totalCount,
+        @Schema(description = "Decaying recency signal", example = "10224.0") Double trendScore
 ) {}
