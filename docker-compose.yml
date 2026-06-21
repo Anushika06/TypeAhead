@@ -1,0 +1,110 @@
+services:
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: typeahead-postgres
+    environment:
+      POSTGRES_DB: typeahead
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "5433:5432"
+    networks:
+      - typeahead-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d typeahead"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: typeahead-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - typeahead-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # ── Spring Boot Backend ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./typeahead
+      dockerfile: Dockerfile
+    container_name: typeahead-backend
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/typeahead
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CORS_ALLOWED_ORIGINS: http://localhost,http://frontend
+    ports:
+      - "8080:8080"
+    networks:
+      - typeahead-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/db || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  # ── React + Vite Frontend (served by Nginx) ──────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Vite bakes env vars at build time — the browser talks directly
+        # to the backend on localhost:8080 (exposed port), not via Docker DNS
+        VITE_API_BASE_URL: http://localhost:8080
+    container_name: typeahead-frontend
+    ports:
+      - "80:80"
+    networks:
+      - typeahead-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+# ── Named Volumes (persisted across docker compose down / up) ─────────────────
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+# ── Internal Bridge Network ───────────────────────────────────────────────────
+networks:
+  typeahead-network:
+    driver: bridge

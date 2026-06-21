@@ -473,6 +473,80 @@ Visit `http://localhost:5173` in your browser.
 
 ---
 
+## 15b. Running with Docker (Recommended for Reviewers)
+
+The entire stack — Frontend, Backend, PostgreSQL, and Redis — can be started with a single command. No local PostgreSQL or Redis installation required.
+
+### Prerequisites
+* Docker Desktop (or Docker Engine + Docker Compose v2)
+
+### Build Images
+
+```bash
+docker compose build
+```
+
+### Start All Services
+
+```bash
+docker compose up -d
+```
+
+Services start in dependency order: PostgreSQL → Redis → Backend → Frontend.
+
+### Access the Application
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost |
+| Backend Swagger UI | http://localhost:8080/swagger-ui/index.html |
+| Backend API | http://localhost:8080 |
+
+### Verify Health
+
+```bash
+# Check all container statuses
+docker compose ps
+
+# Check individual health endpoints
+curl http://localhost:8080/health/db
+curl http://localhost:8080/health/redis
+curl "http://localhost:8080/suggest?q=goo"
+curl http://localhost:8080/trending
+curl http://localhost:8080/metrics
+```
+
+### View Logs
+
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f postgres
+docker compose logs -f redis
+```
+
+### Stop Services
+
+```bash
+docker compose down
+```
+
+### Stop and Remove Volumes (full reset)
+
+```bash
+docker compose down -v
+```
+
+> **Note on Data Persistence:** PostgreSQL data survives `docker compose down` and is restored on `docker compose up` via the `postgres-data` named volume. Use `docker compose down -v` to perform a full reset including the database.
+
+> **Note on Dataset:** The database schema is created automatically on first startup via `init.sql`. You still need to load the AOL search dataset into the PostgreSQL container. Use `docker compose exec postgres psql -U postgres -d typeahead` to connect and import your CSV.
+
+---
+
 ## 16. Database Schema
 
 ```sql

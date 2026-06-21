@@ -1,12 +1,13 @@
 import axios from 'axios';
 import type { Suggestion } from '../types/Suggestion';
+import { API_BASE_URL } from './apiClient';
 
-const API_BASE_URL = 'http://localhost:8080/suggest';
+const SUGGEST_URL = `${API_BASE_URL}/suggest`;
 
 export const suggestionApi = {
   getSuggestions: async (query: string, signal?: AbortSignal): Promise<Suggestion[]> => {
     try {
-      const response = await axios.get<Suggestion[]>(API_BASE_URL, {
+      const response = await axios.get<Suggestion[]>(SUGGEST_URL, {
         params: { q: query },
         signal,
       });

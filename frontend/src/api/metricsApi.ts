@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_BASE_URL } from './apiClient';
 
 export interface MetricsData {
   cacheHits:             number;
@@ -12,7 +13,7 @@ export interface MetricsData {
   avgFlushSize:          number;
 }
 
-const BASE = 'http://localhost:8080';
+const BASE = API_BASE_URL;
 
 export const metricsApi = {
   getMetrics: async (): Promise<MetricsData> => {

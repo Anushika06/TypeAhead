@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_BASE_URL } from './apiClient';
 
 export interface TrendingItem {
   query:      string;
@@ -7,7 +8,7 @@ export interface TrendingItem {
   trendScore: number;
 }
 
-const BASE = 'http://localhost:8080';
+const BASE = API_BASE_URL;
 
 export const trendingApi = {
   getTopTrending: async (): Promise<TrendingItem[]> => {
