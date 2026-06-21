@@ -9,7 +9,7 @@ import { cn } from './GlassCard';
 export const SearchBox: React.FC = () => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
@@ -17,27 +17,41 @@ export const SearchBox: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const isTyping = query !== debouncedQuery && query.length >= 3;
+  const isLoading = isTyping || isFetching;
+
   useEffect(() => {
+    if (debouncedQuery.length < 3) {
+      setSuggestions([]);
+      setIsFetching(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+
     const fetch = async () => {
-      if (debouncedQuery.length < 3) {
-        setSuggestions([]);
-        setIsLoading(false);
-        return;
+      setIsFetching(true);
+      try {
+        const results = await suggestionApi.getSuggestions(debouncedQuery, controller.signal);
+        if (active) {
+          setSuggestions(results.slice(0, 10));
+          setSelectedIndex(-1);
+          setIsFetching(false);
+        }
+      } catch (error) {
+        if (active) {
+          setIsFetching(false);
+        }
       }
-      setIsLoading(true);
-      const results = await suggestionApi.getSuggestions(debouncedQuery);
-      setSuggestions(results.slice(0, 10));
-      setSelectedIndex(-1);
-      setIsLoading(false);
     };
     fetch();
-  }, [debouncedQuery]);
 
-  // Show loading immediately on keystroke (before debounce fires)
-  useEffect(() => {
-    if (query.length >= 3) setIsLoading(true);
-    else { setSuggestions([]); setIsLoading(false); }
-  }, [query]);
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [debouncedQuery]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -53,16 +67,18 @@ export const SearchBox: React.FC = () => {
     setQuery('');
     setSuggestions([]);
     setSelectedIndex(-1);
-    setIsLoading(false);
+    setIsFetching(false);
     inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      setIsFocused(true);
       setSelectedIndex(p => Math.min(p + 1, suggestions.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      setIsFocused(true);
       setSelectedIndex(p => Math.max(p - 1, -1));
     } else if (e.key === 'Enter' && selectedIndex >= 0) {
       e.preventDefault();
@@ -102,7 +118,13 @@ export const SearchBox: React.FC = () => {
           ref={inputRef}
           type="text"
           value={query}
-          onChange={e => { setQuery(e.target.value); setSelectedIndex(-1); }}
+          onChange={e => { 
+            const val = e.target.value;
+            setQuery(val); 
+            setSelectedIndex(-1);
+            setIsFocused(true);
+            if (val.length < 3) setSuggestions([]);
+          }}
           onFocus={() => setIsFocused(true)}
           onKeyDown={handleKeyDown}
           placeholder="Search anything..."
